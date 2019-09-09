@@ -1,18 +1,22 @@
 const fs = require('fs');
+const libxml = require('libxmljs');
 
 class Linter {
     constructor() {
+        this.fileContents = fs.readFileSync(path, coding);
+        this.xmlDoc = libxml.parseXmlString(this.fileContents);
+
         this.tags = [
             {
-                cmp: 'cmpScript',
+                cmp: 'Script',
                 extension: 'js'
             },
             {
-                cmp: 'cmpAction',
+                cmp: 'Action',
                 extension: 'sql'
             },
             {
-                cmp: 'cmpDataSet',
+                cmp: 'DataSet',
                 extension: 'sql'
             }
         ];
@@ -51,51 +55,41 @@ class Linter {
     /**
      * private
      * Получает содержимое переданного тега в файле и помещает его в this.contents
-     * @param {string} fileContents - Содержимое файла.
+     * @param {string} node - Содержимое тега.
      * @param {string} cmp - Имя тега.
      */
-    _getContent(fileContents, cmp) {
-        let match = [];
-        const regex = new RegExp(`<${cmp}[\\s\\S]*?>([\\s\\S]*?)<\\/${cmp}>`, 'gim');
-
+    _getContent(node, cmp) {
         if (!Array.isArray(this.contents[cmp])) {
             this.contents[cmp] = [];
         }
 
         let i = this.contents[cmp].length;
 
-        while (match = regex.exec(fileContents)) {
-            this.contents[cmp].push(match[1]);
+        this.contents[cmp].push(node);
 
-            if (this.contents[cmp][i]) {
-                // Если есть обработка XML <![CDATA[ ]]>, то убираем эти символы.
-                if (~this.contents[cmp][i].indexOf('<![CDATA[')) {
-                    this.contents[cmp][i] = this.contents[cmp][i].replace(/<\!\[CDATA\[([\s\S]*)\]\]([\s\S]*)>/gim, '$1');
+        if (this.contents[cmp][i]) {
+            let firstSymbolPosition = -1;
+            
+            // Убираем лишние пробелы перед каждой строкой.
+            this.contents[cmp][i] = this.contents[cmp][i].split('\n').map(line => {
+                // Находим позицию первого не пустого символа.
+                if (firstSymbolPosition === -1) {
+                    firstSymbolPosition = this.findFirstLetterPosition(line);
                 }
 
-                let firstSymbolPosition = -1;
-                
-                // Убираем лишние пробелы перед каждой строкой.
-                this.contents[cmp][i] = this.contents[cmp][i].split('\n').map(line => {
-                    // Находим позицию первого не пустого символа.
-                    if (firstSymbolPosition === -1) {
-                        firstSymbolPosition = this.findFirstLetterPosition(line);
-                    }
+                // Пропускаем пустые строки, а в не пустых убираем лишнее количество табов и пробелов.
+                return line = line.trim() !== '' ? line.substr(firstSymbolPosition) + '\n' : line + '\n';
+            });
 
-                    // Пропускаем пустые строки, а в не пустых убираем лишнее количество табов и пробелов.
-                    return line = line.trim() !== '' ? line.substr(firstSymbolPosition) : line;
-                });
-
-                if (Array.isArray(this.contents[cmp][i])) {
-                    this.contents[cmp][i] = this.contents[cmp][i].join('');
-                }
-
-                // Обрезаем пустые символы и сиволы переноса строк в самом начале строки.
-                this.contents[cmp][i] = this.contents[cmp][i].substr(this.findFirstLetterPosition(this.contents[cmp][i]));
+            if (Array.isArray(this.contents[cmp][i])) {
+                this.contents[cmp][i] = this.contents[cmp][i].join('');
             }
-        
-            i++;
+
+            // Обрезаем пустые символы и сиволы переноса строк в самом начале строки.
+            this.contents[cmp][i] = this.contents[cmp][i].substr(this.findFirstLetterPosition(this.contents[cmp][i]));
         }
+    
+        i++;
     }
 
     /**
@@ -108,20 +102,20 @@ class Linter {
         const regexPath = new RegExp(`path=([\\"\\'])([^\\"\\']+)\\1`, 'gim');
         let subForms = fileContents.match(regexSubForm);
 
-        subForms.forEach(function(subForm) {
-            let matchPath = [];
+        // subForms.forEach(function(subForm) {
+        //     let matchPath = [];
             
-            // Получаем путь до сабформ.
-            while (matchPath = regexPath.exec(subForm)) {
-                //const path = `Form/${matchPath[2]}.frm`;
-                const path = `${matchPath[2]}.frm`;
+        //     // Получаем путь до сабформ.
+        //     while (matchPath = regexPath.exec(subForm)) {
+        //         //const path = `Form/${matchPath[2]}.frm`;
+        //         const path = `${matchPath[2]}.frm`;
 
-                if (fs.existsSync(path)) {
-                    // TODO: расскоментировать
-                    // self.getContentTagsInFile(path);
-                }
-            }
-        });
+        //         if (fs.existsSync(path)) {
+        //             // TODO: расскоментировать
+        //             // self.getContentTagsInFile(path);
+        //         }
+        //     }
+        // });
     }
 
     /**
@@ -135,21 +129,17 @@ class Linter {
      * }
      */
     getContentTagsInFile(path, coding = 'utf8') {
-        const fileContents = fs.readFileSync(path, coding);
-
         this.tags.forEach(tag => {
             const cmp = tag.cmp;
-            const regex = new RegExp(`<${cmp}[\\s\\S]*?>([\\s\\S]*?)<\\/${cmp}>`, 'gim');
-            //let i = this.contents[cmp].length;
-            let match = [];
+            const cmpNode = this.xmlDoc.find(`.//cmp${cmp}`);
 
-            while (match = regex.exec(fileContents)) {
-                if (cmp !== 'cmpAction') {
-                    this._getContent(match[0], cmp);
+            cmpNode.forEach(node => {
+                if (cmp !== 'Action') {
+                    this._getContent(node.text(), cmp);
                 } else {
-                    this._getContent(match[0], cmp);
+                    this._getContent(node.text(), cmp);
                 }
-            }
+            });
         });
 
         // Рекурсивно проходимся по всем сабформам.
