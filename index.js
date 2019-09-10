@@ -1,6 +1,7 @@
 const Linter = require('./classes/Linter');
 
-const linter = new Linter('print_dyn_pat.frm');
+const linter = new Linter('./spec/resources/form.frm');
 
-linter.getContentTagsInFile()
-     .writeToFile();
+linter
+  .getContentTagsInFile()
+  .writeToFile();
