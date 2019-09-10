@@ -2,8 +2,8 @@ const fs = require('fs');
 const libxml = require('libxmljs');
 
 class Linter {
-    constructor() {
-        this.fileContents = fs.readFileSync(path, coding);
+    constructor(path, encoding = 'utf8') {
+        this.fileContents = fs.readFileSync(path, encoding);
         this.xmlDoc = libxml.parseXmlString(this.fileContents);
 
         this.tags = [
@@ -143,7 +143,7 @@ class Linter {
         });
 
         // Рекурсивно проходимся по всем сабформам.
-        this._checkSubForms(fileContents);
+        this._checkSubForms(this.fileContents);
 
         return this;
     }
