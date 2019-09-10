@@ -1,7 +1,16 @@
 const fs = require('fs');
 const libxml = require('libxmljs');
 
+/**
+ * class Linter
+ */
 class Linter {
+
+    /**
+     * @constructs Linter
+     * @param {string} path - Путь до файла.
+     * @param {string} encoding - Кодировка файла.
+     */
     constructor(path, encoding = 'utf8') {
         this.fileContents = fs.readFileSync(path, encoding);
         this.xmlDoc = libxml.parseXmlString(this.fileContents);
@@ -121,14 +130,14 @@ class Linter {
     /**
      * Возвращает контент для каждого тега в переданном файле. 
      * @param {string} path - Путь до файла.
-     * @param {string} coding - Кодировка файла.
+     * @param {string} encoding - Кодировка файла.
      * @return {object} - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
      * Структура:
      * {
      *      имя_тега: [] - массив с кодом всех тегов.
      * }
      */
-    getContentTagsInFile(path, coding = 'utf8') {
+    getContentTagsInFile(path, encoding = 'utf8') {
         this.tags.forEach(tag => {
             const cmp = tag.cmp;
             const cmpNode = this.xmlDoc.find(`.//cmp${cmp}`);
