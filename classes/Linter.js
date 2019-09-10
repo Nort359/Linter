@@ -12,8 +12,8 @@ class Linter {
      * @param {string} encoding - Кодировка файла.
      */
     constructor(path, encoding = 'utf8') {
+        this.encoding = encoding;
         this.fileContents = fs.readFileSync(path, encoding);
-        this.xmlDoc = libxml.parseXmlString(this.fileContents);
 
         this.tags = [
             {
@@ -66,21 +66,22 @@ class Linter {
      * Получает содержимое переданного тега в файле и помещает его в this.contents
      * @param {string} node - Содержимое тега.
      * @param {string} cmp - Имя тега.
+     * @param {string} cmp - Атрибут name на компоненте.
      */
-    _getContent(node, cmp) {
+    _getContent(node, cmp, nodeName) {
         if (!Array.isArray(this.contents[cmp])) {
             this.contents[cmp] = [];
         }
 
         let i = this.contents[cmp].length;
 
-        this.contents[cmp].push(node);
+        this.contents[cmp].push({ text: node, name: nodeName });
 
-        if (this.contents[cmp][i]) {
+        if (this.contents[cmp][i].text) {
             let firstSymbolPosition = -1;
             
             // Убираем лишние пробелы перед каждой строкой.
-            this.contents[cmp][i] = this.contents[cmp][i].split('\n').map(line => {
+            this.contents[cmp][i].text = this.contents[cmp][i].text.split('\n').map(line => {
                 // Находим позицию первого не пустого символа.
                 if (firstSymbolPosition === -1) {
                     firstSymbolPosition = this.findFirstLetterPosition(line);
@@ -90,12 +91,12 @@ class Linter {
                 return line = line.trim() !== '' ? line.substr(firstSymbolPosition) + '\n' : line + '\n';
             });
 
-            if (Array.isArray(this.contents[cmp][i])) {
-                this.contents[cmp][i] = this.contents[cmp][i].join('');
+            if (Array.isArray(this.contents[cmp][i].text)) {
+                this.contents[cmp][i].text = this.contents[cmp][i].text.join('');
             }
 
             // Обрезаем пустые символы и сиволы переноса строк в самом начале строки.
-            this.contents[cmp][i] = this.contents[cmp][i].substr(this.findFirstLetterPosition(this.contents[cmp][i]));
+            this.contents[cmp][i].text = this.contents[cmp][i].text.substr(this.findFirstLetterPosition(this.contents[cmp][i].text));
         }
     
         i++;
@@ -106,18 +107,19 @@ class Linter {
      * @param {string} fileContents - Содержимое файла.
      */
     _checkSubForms(fileContents) {
-        // TODO: сабформы ещё не протестированы - Протестировать.
         const self = this;
         const cmp = 'SubForm';
-        let d3SubForm = this.xmlDoc.find(`./cmp${cmp}`);
-        let m2SubForm = this.xmlDoc.find(`./component[@cmptype="${cmp}"]`);
+        const xmlDoc = libxml.parseXmlString(fileContents);
+        const d3SubForm = xmlDoc.find(`./cmp${cmp}`);
+        const m2SubForm = xmlDoc.find(`./component[@cmptype="${cmp}"]`);
         this.subForms = d3SubForm.concat(m2SubForm);
 
         this.subForms.forEach(subForm => {
             const path = `${subForm.attr('path').value()}.frm`;
 
             if (fs.existsSync(path)) {
-                self.getContentTagsInFile(path);
+                const subFormFileContents = fs.readFileSync(path, this.encoding);
+                self.getContentTagsInFile(subFormFileContents);
             } else {
                 console.error(`Не найдена сабформа ${path}`);
             }
@@ -136,13 +138,20 @@ class Linter {
     getContentTagsInFile(fileContents = this.fileContents) {
         this.tags.forEach(tag => {
             const cmp = tag.cmp;
-            const cmpNode = this.xmlDoc.find(`.//cmp${cmp}`);
+            const xmlDoc = libxml.parseXmlString(fileContents);
+            const d3Nodes = xmlDoc.find(`.//cmp${cmp}`);
+            const m2Nodes = xmlDoc.find(`.//component[@cmptype="${cmp}"]`);
+            const nodes = d3Nodes.concat(m2Nodes);
 
-            cmpNode.forEach(node => {
+            nodes.forEach(node => {
+                const nodeAttrName = node.attr('name');
+                const nodeName = nodeAttrName && nodeAttrName.value();
+
                 if (cmp !== 'Action') {
-                    this._getContent(node.text(), cmp);
+                    // TODO: Сделать реализацию для сабэкшинов
+                    this._getContent(node.text(), cmp, nodeName);
                 } else {
-                    this._getContent(node.text(), cmp);
+                    this._getContent(node.text(), cmp, nodeName);
                 }
             });
         });
@@ -178,7 +187,8 @@ class Linter {
             }
 
             Array.isArray(contents[cmp]) && contents[cmp].forEach((content, index) => {
-                fs.writeFileSync(`${pathTag}/${cmp + index}.${dir}`, content);
+                const name = content.name;
+                fs.writeFileSync(`${pathTag}/${cmp + '__' + (name ? name : index)}.${dir}`, content.text);
             });
         });
 
