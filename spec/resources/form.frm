@@ -90,4 +90,5 @@
 
     <cmpSubForm path="test" />
     <cmpSubForm path="MyTest" />
+    <component cmptype="SubForm" path="M2Test" />
 </div>

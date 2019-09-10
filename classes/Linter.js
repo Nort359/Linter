@@ -106,38 +106,34 @@ class Linter {
      * @param {string} fileContents - Содержимое файла.
      */
     _checkSubForms(fileContents) {
+        // TODO: сабформы ещё не протестированы - Протестировать.
         const self = this;
-        const regexSubForm = new RegExp(`<cmpSubForm[\\s\\S]*?\\/>?`, 'gim');
-        const regexPath = new RegExp(`path=([\\"\\'])([^\\"\\']+)\\1`, 'gim');
-        let subForms = fileContents.match(regexSubForm);
+        const cmp = 'SubForm';
+        let d3SubForm = this.xmlDoc.find(`./cmp${cmp}`);
+        let m2SubForm = this.xmlDoc.find(`./component[@cmptype="${cmp}"]`);
+        this.subForms = d3SubForm.concat(m2SubForm);
 
-        // subForms.forEach(function(subForm) {
-        //     let matchPath = [];
-            
-        //     // Получаем путь до сабформ.
-        //     while (matchPath = regexPath.exec(subForm)) {
-        //         //const path = `Form/${matchPath[2]}.frm`;
-        //         const path = `${matchPath[2]}.frm`;
+        this.subForms.forEach(subForm => {
+            const path = `${subForm.attr('path').value()}.frm`;
 
-        //         if (fs.existsSync(path)) {
-        //             // TODO: расскоментировать
-        //             // self.getContentTagsInFile(path);
-        //         }
-        //     }
-        // });
+            if (fs.existsSync(path)) {
+                self.getContentTagsInFile(path);
+            } else {
+                console.error(`Не найдена сабформа ${path}`);
+            }
+        });
     }
 
     /**
      * Возвращает контент для каждого тега в переданном файле. 
-     * @param {string} path - Путь до файла.
-     * @param {string} encoding - Кодировка файла.
+     * @param {string} fileContents - Содержимое файла.
      * @return {object} - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
      * Структура:
      * {
      *      имя_тега: [] - массив с кодом всех тегов.
      * }
      */
-    getContentTagsInFile(path, encoding = 'utf8') {
+    getContentTagsInFile(fileContents = this.fileContents) {
         this.tags.forEach(tag => {
             const cmp = tag.cmp;
             const cmpNode = this.xmlDoc.find(`.//cmp${cmp}`);
@@ -152,7 +148,7 @@ class Linter {
         });
 
         // Рекурсивно проходимся по всем сабформам.
-        this._checkSubForms(this.fileContents);
+        this._checkSubForms(fileContents);
 
         return this;
     }
