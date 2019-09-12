@@ -1,6 +1,12 @@
 const Linter = require('./classes/Linter');
 
-const linter = new Linter('./spec/resources/form.frm');
+// [
+//     './spec/resources/form.frm',
+//     './spec/resources/formM2.frm',
+//     './spec/resources/formD3.frm'
+// ]
+
+const linter = new Linter();
 
 linter
   .getContentTagsInFile()

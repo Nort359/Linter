@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const libxml = require('libxmljs');
 
 /**
@@ -8,13 +9,29 @@ class Linter {
 
     /**
      * @constructs Linter
-     * @param {string} path - Путь до файла.
-     * @param {string} encoding - Кодировка файла.
+     * @param {string|Array<string>} path - Путь до файла.
+     * @param {string} encoding           - Кодировка файла.
      */
     constructor(path, encoding = 'utf8') {
-        this.encoding = encoding;
-        this.fileContents = fs.readFileSync(path, encoding);
+        this.fileContents = [];
 
+        if (path) {
+            if (Array.isArray(path)) {
+                path.forEach(p => {
+                    this.fileContents.push(fs.readFileSync(p, encoding));
+                });
+            } else {
+                this.fileContents.push(fs.readFileSync(path, encoding));
+            }
+        } else {
+            this.paths = [];
+            this.getPaths('.\\', 'frm', ['node_modules', '.git', '.idea', 'temp']);
+            this.paths.forEach(p => {
+                this.fileContents.push(fs.readFileSync(p, encoding));
+            });
+        }
+
+        this.encoding = encoding;
         this.tags = [
             {
                 cmp: 'Script',
@@ -35,9 +52,40 @@ class Linter {
     }
 
     /**
+     * Метод рекурсивно прохоится по всем директориям в проекте и ищет файлы с заданными расширениеми.
+     * @param {string|Array<string>} startPath     - Директория, в которой необходимо начать поиск.
+     * @param {string|Array<string>} filter        - Расширения файлов, которые необходимо найти.
+     * @param {string|Array<string>} exceptionPath - Пути до директорий, которые необходимо пропустить при поиске.
+     */
+    getPaths(startPath, filter, exceptionPath) {
+        const self = this;
+
+        if (!Array.isArray(exceptionPath)) {
+            exceptionPath = [exceptionPath];
+        }
+
+        if (!~exceptionPath.indexOf(startPath)) {
+            if (!fs.existsSync(startPath)) return;
+
+            const files = fs.readdirSync(startPath);
+
+            files.forEach(file => {
+                const filename = path.join(startPath, file);
+                const stat = fs.lstatSync(filename);
+
+                if (stat.isDirectory()) {
+                    self.getPaths(filename, filter); // recurse
+                } else if (filename.indexOf(filter) >= 0) {
+                    self.paths.push(filename);
+                }
+            });
+        }
+    }
+
+    /**
      * Проверяет является ли символ пустым символом.
      * @param {string} symbol - Символ, который необходимо проверить.
-     * @return {boolean} - true - не пустой, false - пустой.
+     * @return {boolean}      - true - не пустой, false - пустой.
      */
     isLetter(symbol) {
         return symbol.toUpperCase() !== symbol.toLowerCase();
@@ -46,7 +94,7 @@ class Linter {
     /**
      * Находит позицию первого не пустого символа.
      * @param {string} str - Строка, где необходимо производить поиск.
-     * @return {string} - Позиция первого не пустого символа.
+     * @return {string}    - Позиция первого не пустого символа.
      */
     findFirstLetterPosition(str) {
         let position = -1;
@@ -64,9 +112,9 @@ class Linter {
     /**
      * private
      * Получает содержимое переданного тега в файле и помещает его в this.contents
-     * @param {string} node - Содержимое тега.
-     * @param {string} cmp - Имя тега.
-     * @param {string} cmp - Атрибут name на компоненте.
+     * @param {string} node     - Содержимое тега.
+     * @param {string} cmp      - Имя тега.
+     * @param {string} nodeName - Атрибут name на компоненте.
      */
     _getContent(node, cmp, nodeName) {
         if (!Array.isArray(this.contents[cmp])) {
@@ -128,38 +176,46 @@ class Linter {
 
     /**
      * Возвращает контент для каждого тега в переданном файле. 
-     * @param {string} fileContents - Содержимое файла.
-     * @return {object} - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
+     * @param {string|Array<string>} fileContents - Содержимое файла.
+     * @return {object}             - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
      * Структура:
      * {
      *      имя_тега: [] - массив с кодом всех тегов.
      * }
      */
     getContentTagsInFile(fileContents = this.fileContents) {
-        this.tags.forEach(tag => {
-            const cmp = tag.cmp;
-            const xmlDoc = libxml.parseXmlString(fileContents);
-            const d3Nodes = xmlDoc.find(`.//cmp${cmp}`);
-            const m2Nodes = xmlDoc.find(`.//component[@cmptype="${cmp}"]`);
-            const nodes = d3Nodes.concat(m2Nodes);
+        const self = this;
 
-            nodes.forEach(node => {
-                const nodeAttrName = node.attr('name');
-                const nodeName = nodeAttrName && nodeAttrName.value();
+        if (!Array.isArray(fileContents)) {
+            fileContents = [fileContents];
+        }
 
-                if (cmp !== 'Action') {
-                    // TODO: Сделать реализацию для сабэкшинов
-                    this._getContent(node.text(), cmp, nodeName);
-                } else {
-                    this._getContent(node.text(), cmp, nodeName);
-                }
+        fileContents.forEach(file => {
+            self.tags.forEach(tag => {
+                const cmp = tag.cmp;
+                const xmlDoc = libxml.parseXmlString(file);
+                const d3Nodes = xmlDoc.find(`.//cmp${cmp}`);
+                const m2Nodes = xmlDoc.find(`.//component[@cmptype="${cmp}"]`);
+                const nodes = d3Nodes.concat(m2Nodes);
+
+                nodes.forEach(node => {
+                    const nodeAttrName = node.attr('name');
+                    const nodeName = nodeAttrName && nodeAttrName.value();
+
+                    if (cmp !== 'Action') {
+                        // TODO: Сделать реализацию для сабэкшинов
+                        self._getContent(node.text(), cmp, nodeName);
+                    } else {
+                        self._getContent(node.text(), cmp, nodeName);
+                    }
+                });
             });
+
+            // Рекурсивно проходимся по всем сабформам.
+            self._checkSubForms(file);
         });
 
-        // Рекурсивно проходимся по всем сабформам.
-        this._checkSubForms(fileContents);
-
-        return this;
+        return self;
     }
 
     /**
