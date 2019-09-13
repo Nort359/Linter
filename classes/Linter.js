@@ -25,11 +25,13 @@ class Linter {
             }
         } else {
             this.paths = [];
-            this.getPaths('.\\', 'frm', ['node_modules', '.git', '.idea', 'temp']);
+            this.getFilePaths('.\\', 'frm', ['node_modules', '.git', '.idea', 'temp']);
             this.paths.forEach(p => {
                 this.fileContents.push(fs.readFileSync(p, encoding));
             });
         }
+
+        this.paths = [];
 
         this.encoding = encoding;
         this.tags = [
@@ -53,11 +55,11 @@ class Linter {
 
     /**
      * Метод рекурсивно прохоится по всем директориям в проекте и ищет файлы с заданными расширениеми.
-     * @param {string|Array<string>} startPath     - Директория, в которой необходимо начать поиск.
-     * @param {string|Array<string>} filter        - Расширения файлов, которые необходимо найти.
-     * @param {string|Array<string>} exceptionPath - Пути до директорий, которые необходимо пропустить при поиске.
+     * @param {string|Array<string>} startPath          - Директория, в которой необходимо начать поиск.
+     * @param {string|Array<string>} filter             - Расширения файлов, которые необходимо найти.
+     * @param {string|Array<string>|null} exceptionPath - Пути до директорий, которые необходимо пропустить при поиске.
      */
-    getPaths(startPath, filter, exceptionPath) {
+    getFilePaths(startPath, filter, exceptionPath = null) {
         const self = this;
 
         if (!Array.isArray(exceptionPath)) {
@@ -74,12 +76,14 @@ class Linter {
                 const stat = fs.lstatSync(filename);
 
                 if (stat.isDirectory()) {
-                    self.getPaths(filename, filter); // recurse
+                    self.getFilePaths(filename, filter); // recurse
                 } else if (filename.indexOf(filter) >= 0) {
                     self.paths.push(filename);
                 }
             });
         }
+
+        return this.paths;
     }
 
     /**
