@@ -12,7 +12,7 @@ const executeCommand = (command, cb) => {
             return cb(null, stdout);
         }
     });
-}
+};
 
 // executeCommand(`eslint ./temp/js/**`, (error, message) => {
 //     if (!error) {
@@ -47,7 +47,7 @@ executeCommand('git status', (error, message) => {
     .writeToFile();
 
     const filesJS = linter.getFilePaths('.\\temp\\js', 'js');
-    // console.log(filesJS);
+    linter.lintJS(filesJS);
 
     // filesJS.forEach(file => {
     //     executeCommand(`eslint ${file}`, (error, message) => {

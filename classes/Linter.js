@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const libxml = require('libxmljs');
+const CLIEngine = require("eslint").CLIEngine;
 
 /**
  * class Linter
@@ -155,6 +156,7 @@ class Linter {
     }
 
     /**
+     * private
      * Ищет все сабформы на форме и получает из них контент вызывая метод this.getContentTagsInFile.
      * @param {string} fileContents - Содержимое файла.
      */
@@ -253,6 +255,38 @@ class Linter {
         });
 
         return this;
+    }
+
+    /**
+     * Метод линтит переданные JS файлы и выводит найденные ошибки в консоль.
+     * @param {Array<string>} files - массив файлов (путей).
+     */
+    lintJS(files) {
+        const cli = new CLIEngine({
+            envs: ["browser", "mocha"],
+            fix: false, // difference from last example
+            useEslintrc: true
+        });
+
+        if (Array.isArray(files)) {
+            const report = cli.executeOnFiles(files);
+
+            console.log(report);
+
+            report.results.forEach(function(result) {
+                const fileName = result.filePath.split('\\');
+                console.log(`Файл: ${fileName[fileName.length - 1]}.`);
+                console.log(`Найдено ${result.errorCount} ошибок и ${result.warningCount} предупреждений.\n`);
+
+                result.messages.forEach(function(message) {
+                    console.log(message.message);
+                });
+
+                console.log('\n-------------------------------------\n');
+            });
+        } else {
+            console.log('Ожидался масив файлов. Получено: ' + typeof files);
+        }
     }
 }
 
