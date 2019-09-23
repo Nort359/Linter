@@ -6,21 +6,13 @@ const executeCommand = (command, cb) => {
     var child = exec(command, (err, stdout, stderr) => {
         if (err !== null) {
             return cb(new Error(err), null);
-        } else if( typeof stderr !== "string") {
+        } else if( typeof stderr !== 'string') {
             return cb(new Error(stderr), null);
         } else {
             return cb(null, stdout);
         }
     });
 };
-
-// executeCommand(`eslint ./temp/js/**`, (error, message) => {
-//     if (!error) {
-//         console.log(message);
-//     } else {
-//         console.error(error);
-//     }
-// });
 
 executeCommand('git status', (error, message) => {
     let modifiedFiles = [];
@@ -43,22 +35,13 @@ executeCommand('git status', (error, message) => {
     const linter = new Linter();
 
     linter
-    .getContentTagsInFile()
-    .writeToFile();
-
-    const filesJS = linter.getFilePaths('.\\temp\\js', 'js');
-    linter.lintJS(filesJS);
-
-    // filesJS.forEach(file => {
-    //     executeCommand(`eslint ${file}`, (error, message) => {
-    //         if (!error) {
-    //             console.log(message);
-    //         } else {
-    //             console.error(error);
-    //         }
-    //     });
-    // });
+        .getContentTagsInFile()
+        .writeToFile()
+        .lintJS()
+        .deleteTempFiles();
 });
+
+// TODO: скрипт для отлавливания вывода в консоль. Может пригодится.
 
 // let test = [];
 //

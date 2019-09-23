@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const chalk = require('chalk');
 const libxml = require('libxmljs');
 const CLIEngine = require("eslint").CLIEngine;
 
@@ -19,16 +20,16 @@ class Linter {
         if (path) {
             if (Array.isArray(path)) {
                 path.forEach(p => {
-                    this.fileContents.push(fs.readFileSync(p, encoding));
+                    this.fileContents.push({ path: p, content: fs.readFileSync(p, encoding) });
                 });
             } else {
-                this.fileContents.push(fs.readFileSync(path, encoding));
+                this.fileContents.push({ path: path, content: fs.readFileSync(path, encoding) });
             }
         } else {
             this.paths = [];
             this.getFilePaths('.\\', 'frm', ['node_modules', '.git', '.idea', 'temp']);
             this.paths.forEach(p => {
-                this.fileContents.push(fs.readFileSync(p, encoding));
+                this.fileContents.push({ path: p, content: fs.readFileSync(p, encoding) });
             });
         }
 
@@ -120,15 +121,16 @@ class Linter {
      * @param {string} node     - Содержимое тега.
      * @param {string} cmp      - Имя тега.
      * @param {string} nodeName - Атрибут name на компоненте.
+     * @param {string} path     - Путь до проверяемого файла.
      */
-    _getContent(node, cmp, nodeName) {
+    _getContent(node, cmp, nodeName, path) {
         if (!Array.isArray(this.contents[cmp])) {
             this.contents[cmp] = [];
         }
 
         let i = this.contents[cmp].length;
 
-        this.contents[cmp].push({ text: node, name: nodeName });
+        this.contents[cmp].push({ text: node, name: nodeName, path: path });
 
         if (this.contents[cmp][i].text) {
             let firstSymbolPosition = -1;
@@ -151,8 +153,6 @@ class Linter {
             // Обрезаем пустые символы и сиволы переноса строк в самом начале строки.
             this.contents[cmp][i].text = this.contents[cmp][i].text.substr(this.findFirstLetterPosition(this.contents[cmp][i].text));
         }
-    
-        i++;
     }
 
     /**
@@ -175,7 +175,7 @@ class Linter {
                 const subFormFileContents = fs.readFileSync(path, this.encoding);
                 self.getContentTagsInFile(subFormFileContents);
             } else {
-                console.error(`Не найдена сабформа ${path}`);
+                console.error('Не найдена сабформа ' + chalk.red(path));
             }
         });
     }
@@ -183,10 +183,10 @@ class Linter {
     /**
      * Возвращает контент для каждого тега в переданном файле. 
      * @param {string|Array<string>} fileContents - Содержимое файла.
-     * @return {object}             - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
+     * @return {object}                           - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
      * Структура:
      * {
-     *      имя_тега: [] - массив с кодом всех тегов.
+     *      имя_тега: [] - Массив с кодом всех тегов.
      * }
      */
     getContentTagsInFile(fileContents = this.fileContents) {
@@ -199,7 +199,7 @@ class Linter {
         fileContents.forEach(file => {
             self.tags.forEach(tag => {
                 const cmp = tag.cmp;
-                const xmlDoc = libxml.parseXmlString(file);
+                const xmlDoc = libxml.parseXmlString(file.content);
                 const d3Nodes = xmlDoc.find(`.//cmp${cmp}`);
                 const m2Nodes = xmlDoc.find(`.//component[@cmptype="${cmp}"]`);
                 const nodes = d3Nodes.concat(m2Nodes);
@@ -210,15 +210,15 @@ class Linter {
 
                     if (cmp !== 'Action') {
                         // TODO: Сделать реализацию для сабэкшинов
-                        self._getContent(node.text(), cmp, nodeName);
+                        self._getContent(node.text(), cmp, nodeName, file.path);
                     } else {
-                        self._getContent(node.text(), cmp, nodeName);
+                        self._getContent(node.text(), cmp, nodeName, file.path);
                     }
                 });
             });
 
             // Рекурсивно проходимся по всем сабформам.
-            self._checkSubForms(file);
+            self._checkSubForms(file.content);
         });
 
         return self;
@@ -229,7 +229,7 @@ class Linter {
      * @param {object} contents - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
      * Структура:
      * {
-     *      имя_тега: [] - массив с кодом всех тегов.
+     *      имя_тега: [] - Массив с кодом всех тегов.
      * }
      */
     writeToFile(contents = this.contents) {
@@ -250,7 +250,9 @@ class Linter {
 
             Array.isArray(contents[cmp]) && contents[cmp].forEach((content, index) => {
                 const name = content.name;
-                fs.writeFileSync(`${pathTag}/${cmp + '__' + (name ? name : index)}.${dir}`, content.text);
+                const newFilePath = `${pathTag}/${cmp + '__' + (name ? name : index)}.${dir}`;
+                fs.writeFileSync(newFilePath, content.text);
+                this.contents[cmp][index].lintFile = newFilePath;
             });
         });
 
@@ -259,34 +261,56 @@ class Linter {
 
     /**
      * Метод линтит переданные JS файлы и выводит найденные ошибки в консоль.
-     * @param {Array<string>} files - массив файлов (путей).
+     * @param {object} contents - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
+     * Структура:
+     * {
+     *      имя_тега: [] - Массив с кодом всех тегов.
+     * }
      */
-    lintJS(files) {
+    lintJS(contents = this.contents) {
         const cli = new CLIEngine({
-            envs: ["browser", "mocha"],
-            fix: false, // difference from last example
+            envs: ['browser', 'mocha'],
+            fix: false,
             useEslintrc: true
         });
 
-        if (Array.isArray(files)) {
-            const report = cli.executeOnFiles(files);
-
-            console.log(report);
+        Array.isArray(contents['Script']) && contents['Script'].forEach(content => {
+            const report = cli.executeOnFiles(content.lintFile);
 
             report.results.forEach(function(result) {
                 const fileName = result.filePath.split('\\');
-                console.log(`Файл: ${fileName[fileName.length - 1]}.`);
-                console.log(`Найдено ${result.errorCount} ошибок и ${result.warningCount} предупреждений.\n`);
+
+                console.log('\nФайл: ' + chalk.green(content.path) + ', имя скрипта: ' + chalk.green(content.name ? content.name : '[Атрибут \'name\' у тега \'Script\' отсутсвует]') + '.');
+                console.log('Найдено ' + chalk.red(result.errorCount  + ' ошибок') + ' и ' + chalk.yellow(result.warningCount + ' предупреждений') + '.\n');
 
                 result.messages.forEach(function(message) {
-                    console.log(message.message);
+                    console.log('Строка: ' + message.line + ', Столбец: ' + message.column + ': ' + chalk.red(message.ruleId) + ' ' + message.message);
                 });
 
                 console.log('\n-------------------------------------\n');
             });
-        } else {
-            console.log('Ожидался масив файлов. Получено: ' + typeof files);
+        });
+
+        return this;
+    }
+
+    deleteTempFiles(path = 'temp/') {
+        const self = this;
+
+        if (fs.existsSync(path)) {
+            fs.readdirSync(path).forEach((file, index) => {
+                const curPath = path + '/' + file;
+                if (fs.lstatSync(curPath).isDirectory()) { // recurse
+                    self.deleteTempFiles(curPath);
+                } else { // delete file
+                    fs.unlinkSync(curPath);
+                }
+            });
+
+            fs.rmdirSync(path);
         }
+
+        return this;
     }
 }
 
