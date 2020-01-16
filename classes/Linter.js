@@ -89,26 +89,27 @@ class Linter {
     }
 
     /**
-     * Проверяет является ли символ пустым символом.
-     * @param {string} symbol - Символ, который необходимо проверить.
-     * @return {boolean}      - true - не пустой, false - пустой.
+     * Находит позицию не пустого символа.
+     * @param {string}  str       - Строка, где необходимо производить поиск.
+     * @param {boolean} fromBegin - true - начинать поиск с начала строки, fakse - с конца.
+     * @return {number}           - Позиция первого не пустого символа.
      */
-    isLetter(symbol) {
-        return symbol.toUpperCase() !== symbol.toLowerCase();
-    }
-
-    /**
-     * Находит позицию первого не пустого символа.
-     * @param {string} str - Строка, где необходимо производить поиск.
-     * @return {string}    - Позиция первого не пустого символа.
-     */
-    findFirstLetterPosition(str) {
+    static findLetterPosition(str, fromBegin = true) {
         let position = -1;
 
-        for (let j = 0; j <= str.length; j++) {
-            if (str[j] && this.isLetter(str[j])) {
-                position = j;
-                break;
+        if (fromBegin) {
+            for (let i = 0; i <= str.length; i++) {
+                if (str[i] && /\S/.test(str[i])) {
+                    position = i;
+                    break;
+                }
+            }
+        } else {
+            for (let i = str.length; i >= 0; i--) {
+                if (str[i] && /\S/.test(str[i])) {
+                    position = i;
+                    break;
+                }
             }
         }
 
@@ -121,16 +122,17 @@ class Linter {
      * @param {string} node     - Содержимое тега.
      * @param {string} cmp      - Имя тега.
      * @param {string} nodeName - Атрибут name на компоненте.
+     * @param {number} line     - Номер строки исходного файла, где был обнаружен текущий тег.
      * @param {string} path     - Путь до проверяемого файла.
      */
-    _getContent(node, cmp, nodeName, path) {
+    _getContent(node, cmp, nodeName, line, path) {
         if (!Array.isArray(this.contents[cmp])) {
             this.contents[cmp] = [];
         }
 
         let i = this.contents[cmp].length;
 
-        this.contents[cmp].push({ text: node, name: nodeName, path: path });
+        this.contents[cmp].push({ text: node, name: nodeName, path: path, line: line });
 
         if (this.contents[cmp][i].text) {
             let firstSymbolPosition = -1;
@@ -139,7 +141,7 @@ class Linter {
             this.contents[cmp][i].text = this.contents[cmp][i].text.split('\n').map(line => {
                 // Находим позицию первого не пустого символа.
                 if (firstSymbolPosition === -1) {
-                    firstSymbolPosition = this.findFirstLetterPosition(line);
+                    firstSymbolPosition = Linter.findLetterPosition(line);
                 }
 
                 // Пропускаем пустые строки, а в не пустых убираем лишнее количество табов и пробелов.
@@ -151,7 +153,10 @@ class Linter {
             }
 
             // Обрезаем пустые символы и сиволы переноса строк в самом начале строки.
-            this.contents[cmp][i].text = this.contents[cmp][i].text.substr(this.findFirstLetterPosition(this.contents[cmp][i].text));
+            this.contents[cmp][i].text = this.contents[cmp][i].text.substr(Linter.findLetterPosition(this.contents[cmp][i].text));
+            // Обрезаем пустые символы и сиволы переноса строк в конце строки.
+            var symbolsCount = this.contents[cmp][i].text.length - Linter.findLetterPosition(this.contents[cmp][i].text, false);
+            this.contents[cmp][i].text = this.contents[cmp][i].text.substr(0, this.contents[cmp][i].text.length - symbolsCount + 1);
         }
     }
 
@@ -206,13 +211,14 @@ class Linter {
 
                 nodes.forEach(node => {
                     const nodeAttrName = node.attr('name');
+                    const line = node.line();
                     const nodeName = nodeAttrName && nodeAttrName.value();
 
                     if (cmp !== 'Action') {
                         // TODO: Сделать реализацию для сабэкшинов
-                        self._getContent(node.text(), cmp, nodeName, file.path);
+                        self._getContent(node.text(), cmp, nodeName, line, file.path);
                     } else {
-                        self._getContent(node.text(), cmp, nodeName, file.path);
+                        self._getContent(node.text(), cmp, nodeName, line, file.path);
                     }
                 });
             });
@@ -284,7 +290,7 @@ class Linter {
                 console.log('Найдено ' + chalk.red(result.errorCount  + ' ошибок') + ' и ' + chalk.yellow(result.warningCount + ' предупреждений') + '.\n');
 
                 result.messages.forEach(function(message) {
-                    console.log('Строка: ' + message.line + ', Столбец: ' + message.column + ': ' + chalk.red(message.ruleId) + ' ' + message.message);
+                    console.log('Строка: ' + (content.line + message.line + 1) + ', Столбец: ' + message.column + ': ' + chalk.red(message.ruleId) + ' ' + message.message);
                 });
 
                 console.log('\n-------------------------------------\n');
