@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "test": "jasmine",
-    "linter": "node ./index.js"
+    "linter": "node ./index.js",
+    "linterGit": "set fromGit=1 && node ./index.js",
+    "linterAll": "set fromGit=0 && node ./index.js"
   },
   "keywords": [],
   "author": "",

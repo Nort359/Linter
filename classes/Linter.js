@@ -298,7 +298,12 @@ class Linter {
                 console.log('\nФайл' + (content.isSubForm ? ' (Сабформа)' : '') + ': ' + chalk.green(content.path) +
                     ', строка, на которой находится тег: ' + chalk.green(content.line) +
                     ', имя тега: ' + chalk.green(content.name ? content.name : '[Атрибут \'name\' у тега \'Script\' отсутсвует]') + '.');
-                console.log('Найдено ' + chalk.red(result.errorCount  + ' ошибок') + ' и ' + chalk.yellow(result.warningCount + ' предупреждений') + '.\n');
+
+                if (result.errorCount === 0) {
+                    console.log(chalk.green('+ Замечаний к файлу нет.'));
+                } else {
+                    console.log('Найдено ' + chalk.red(result.errorCount  + ' ошибок') + ' и ' + chalk.yellow(result.warningCount + ' предупреждений') + '.\n');
+                }
 
                 result.messages.forEach(function(message) {
                     console.log('Строка: ' + (content.line + message.line + 1) + ', Столбец: ' + message.column + ': ' + chalk.red(message.ruleId) + ' ' + message.message);
