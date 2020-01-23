@@ -32,7 +32,7 @@ executeCommand('git status', (error, message) => {
     }
 
     // const linter = new Linter(modifiedFiles);
-    const linter = new Linter();
+    const linter = new Linter(modifiedFiles);
 
     linter
         .getContentTagsInFile()

@@ -18,16 +18,24 @@ class Linter {
         this.fileContents = [];
 
         if (path) {
-            if (Array.isArray(path)) {
-                path.forEach(p => {
-                    this.fileContents.push({ path: p, content: fs.readFileSync(p, encoding) });
-                });
-            } else {
-                this.fileContents.push({ path: path, content: fs.readFileSync(path, encoding) });
+            if (!Array.isArray(path)) {
+                path = [path];
+            }
+
+            for (let i = 0; i < path.length; i++) {
+                let ext = path[i].split('.');
+                ext = ext[ext.length - 1];
+
+                if (ext !== 'frm') {
+                    continue;
+                }
+
+                this.fileContents.push({ path: path[i], content: fs.readFileSync(path[i], encoding), isSubForm: false });
             }
         } else {
             this.paths = [];
             this.getFilePaths('.\\', 'frm', ['node_modules', '.git', '.idea', 'temp']);
+
             this.paths.forEach(p => {
                 this.fileContents.push({ path: p, content: fs.readFileSync(p, encoding) });
             });
@@ -52,7 +60,6 @@ class Linter {
         ];
 
         this.contents = {};
-        this.subforms = [];
     }
 
     /**
@@ -119,20 +126,21 @@ class Linter {
     /**
      * private
      * Получает содержимое переданного тега в файле и помещает его в this.contents
-     * @param {string} node     - Содержимое тега.
-     * @param {string} cmp      - Имя тега.
-     * @param {string} nodeName - Атрибут name на компоненте.
-     * @param {number} line     - Номер строки исходного файла, где был обнаружен текущий тег.
-     * @param {string} path     - Путь до проверяемого файла.
+     * @param {string} node      - Содержимое тега.
+     * @param {string} cmp       - Имя тега.
+     * @param {string} nodeName  - Атрибут name на компоненте.
+     * @param {number} line      - Номер строки исходного файла, где был обнаружен текущий тег.
+     * @param {string} path      - Путь до проверяемого файла.
+     * @param {string} isSubForm - Является ли файл сабформой.
      */
-    _getContent(node, cmp, nodeName, line, path) {
+    _getContent(node, cmp, nodeName, line, path, isSubForm) {
         if (!Array.isArray(this.contents[cmp])) {
             this.contents[cmp] = [];
         }
 
         let i = this.contents[cmp].length;
 
-        this.contents[cmp].push({ text: node, name: nodeName, path: path, line: line });
+        this.contents[cmp].push({ text: node, name: nodeName, path: path, line: line, isSubForm: isSubForm });
 
         if (this.contents[cmp][i].text) {
             let firstSymbolPosition = -1;
@@ -171,14 +179,15 @@ class Linter {
         const xmlDoc = libxml.parseXmlString(fileContents);
         const d3SubForm = xmlDoc.find(`./cmp${cmp}`);
         const m2SubForm = xmlDoc.find(`./component[@cmptype="${cmp}"]`);
-        this.subForms = d3SubForm.concat(m2SubForm);
+        const subForms = d3SubForm.concat(m2SubForm);
 
-        this.subForms.forEach(subForm => {
-            const path = `${subForm.attr('path').value()}.frm`;
+        subForms.forEach(subForm => {
+            const path = `Forms\/${subForm.attr('path').value()}.frm`;
 
             if (fs.existsSync(path)) {
-                const subFormFileContents = fs.readFileSync(path, this.encoding);
-                self.getContentTagsInFile(subFormFileContents);
+                const subFormContent = [];
+                subFormContent.push({ path: path, content: fs.readFileSync(path, this.encoding), isSubForm: true });
+                self.getContentTagsInFile(subFormContent);
             } else {
                 console.error('Не найдена сабформа ' + chalk.red(path));
             }
@@ -216,9 +225,9 @@ class Linter {
 
                     if (cmp !== 'Action') {
                         // TODO: Сделать реализацию для сабэкшинов
-                        self._getContent(node.text(), cmp, nodeName, line, file.path);
+                        self._getContent(node.text(), cmp, nodeName, line, file.path, file.isSubForm);
                     } else {
-                        self._getContent(node.text(), cmp, nodeName, line, file.path);
+                        self._getContent(node.text(), cmp, nodeName, line, file.path, file.isSubForm);
                     }
                 });
             });
@@ -239,7 +248,7 @@ class Linter {
      * }
      */
     writeToFile(contents = this.contents) {
-        const pathTemp = `temp/`;
+        const pathTemp = 'temp\/';
 
         if (!fs.existsSync(pathTemp)) {
             fs.mkdirSync(pathTemp);
@@ -286,7 +295,9 @@ class Linter {
             report.results.forEach(function(result) {
                 const fileName = result.filePath.split('\\');
 
-                console.log('\nФайл: ' + chalk.green(content.path) + ', имя скрипта: ' + chalk.green(content.name ? content.name : '[Атрибут \'name\' у тега \'Script\' отсутсвует]') + '.');
+                console.log('\nФайл' + (content.isSubForm ? ' (Сабформа)' : '') + ': ' + chalk.green(content.path) +
+                    ', строка, на которой находится тег: ' + chalk.green(content.line) +
+                    ', имя тега: ' + chalk.green(content.name ? content.name : '[Атрибут \'name\' у тега \'Script\' отсутсвует]') + '.');
                 console.log('Найдено ' + chalk.red(result.errorCount  + ' ошибок') + ' и ' + chalk.yellow(result.warningCount + ' предупреждений') + '.\n');
 
                 result.messages.forEach(function(message) {
