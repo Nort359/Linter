@@ -54,7 +54,15 @@ class Linter {
                 extension: 'sql'
             },
             {
+                cmp: 'SubAction',
+                extension: 'sql'
+            },
+            {
                 cmp: 'DataSet',
+                extension: 'sql'
+            },
+            {
+                cmp: 'SubSelect',
                 extension: 'sql'
             }
         ];
@@ -223,10 +231,23 @@ class Linter {
                     const line = node.line();
                     const nodeName = nodeAttrName && nodeAttrName.value();
 
-                    if (cmp !== 'Action') {
-                        // TODO: Сделать реализацию для сабэкшинов
-                        self._getContent(node.text(), cmp, nodeName, line, file.path, file.isSubForm);
-                    } else {
+                    if (tag.extension === 'sql') {
+                        const d3subActions = xmlDoc.find(`.//cmpSubAction`);
+                        const m2subActions = xmlDoc.find(`.//component[@cmptype="SubAction"]`);
+                        const subActions = d3subActions.concat(m2subActions);
+                        subActions.forEach(subAction => {
+                            subAction.remove();
+                        });
+
+                        const d3subSelects = xmlDoc.find(`.//cmpSubSelect`);
+                        const m2subSelects = xmlDoc.find(`.//component[@cmptype="SubSelect"]`);
+                        const subSelects = d3subSelects.concat(m2subSelects);
+                        subSelects.forEach(subSelect => {
+                            subSelect.remove();
+                        });
+                    }
+
+                    if (node.text().trim() !== '') {
                         self._getContent(node.text(), cmp, nodeName, line, file.path, file.isSubForm);
                     }
                 });
