@@ -1,17 +1,25 @@
 const Linter = require('./classes/Linter');
 const exec = require('child_process').exec;
 
-const executeLinting = paths => {
-    new Linter(paths)
+const executeLinting = async paths => {
+    const linter = new Linter(paths)
         .getContentTagsInFile()
         .writeToFile()
-        .lintJS()
-        .deleteTempFiles();
+        .lintJS();
+
+    await linter.lintPHPFiles(exec)
+        .catch(error => {
+            if (error) {
+                console.error(`Promise wss failed: ${error}`);
+            }
+    });
+
+    linter.deleteTempFiles();
 };
 
 if (+process.env.fromGit === 1) {
     const executeCommand = (command, cb) => {
-        var child = exec(command, (err, stdout, stderr) => {
+        exec(command, (err, stdout, stderr) => {
             if (err !== null) {
                 return cb(new Error(err), null);
             } else if( typeof stderr !== 'string') {
@@ -29,7 +37,7 @@ if (+process.env.fromGit === 1) {
             let lines = message.split('\n');
 
             lines.forEach(line => {
-                if (line.includes('modified')) {
+                if (line.includes('modified') || line.includes('new file') || line.includes('renamed')) {
                     const filePath = line.split(':')[1].trim();
                     modifiedFiles.push(filePath);
                 }
@@ -38,8 +46,10 @@ if (+process.env.fromGit === 1) {
             console.error(error);
         }
 
-        executeLinting(modifiedFiles);
+        executeLinting(modifiedFiles)
+            .catch(error => console.error(`Execute linting was failed: ${error}`));
     });
 } else {
-    executeLinting();
+    executeLinting()
+        .catch(error => console.error(`Execute linting was failed: ${error}`));
 }

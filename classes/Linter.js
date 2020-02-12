@@ -16,6 +16,9 @@ class Linter {
      */
     constructor(path, encoding = 'utf8') {
         this.fileContents = [];
+        this.pathTemp = 'tempLint';
+        this.phpExtensions = ['inc', 'mdl', 'php'];
+        this.phpPaths = [];
 
         if (path) {
             if (!Array.isArray(path)) {
@@ -24,7 +27,13 @@ class Linter {
 
             for (let i = 0; i < path.length; i++) {
                 let ext = path[i].split('.');
+                let fileName = path[i].split('/');
                 ext = ext[ext.length - 1];
+                fileName = fileName[fileName.length - 1];
+
+                if (~this.phpExtensions.indexOf(ext)) {
+                    this.phpPaths.push(path[i]);
+                }
 
                 if (ext !== 'frm') {
                     continue;
@@ -269,16 +278,14 @@ class Linter {
      * }
      */
     writeToFile(contents = this.contents) {
-        const pathTemp = 'temp\/';
-
-        if (!fs.existsSync(pathTemp)) {
-            fs.mkdirSync(pathTemp);
+        if (!fs.existsSync(this.pathTemp)) {
+            fs.mkdirSync(this.pathTemp);
         }
 
         this.tags.forEach(tag => {
             const dir = tag.extension;
             const cmp = tag.cmp;
-            const pathTag = `${pathTemp}/${dir}/`;
+            const pathTag = `${this.pathTemp}/${dir}/`;
 
             if (!fs.existsSync(pathTag)) {
                 fs.mkdirSync(pathTag);
@@ -337,11 +344,16 @@ class Linter {
         return this;
     }
 
-    deleteTempFiles(path = 'temp/') {
+    /**
+     * Удаляет временные файлы, созданные для выполнения линтинга.
+     * @param path - Путь, по которому будут удаляться временные файлы.
+     * @returns {Linter}
+     */
+    deleteTempFiles(path = this.pathTemp) {
         const self = this;
 
         if (fs.existsSync(path)) {
-            fs.readdirSync(path).forEach((file, index) => {
+            fs.readdirSync(path).forEach(file => {
                 const curPath = path + '/' + file;
                 if (fs.lstatSync(curPath).isDirectory()) { // recurse
                     self.deleteTempFiles(curPath);
@@ -354,6 +366,25 @@ class Linter {
         }
 
         return this;
+    }
+
+    /**
+     * Линтит php файлы, с PHP кодом.
+     * @param execFunc - Функция, для выполнения команды линтинга файлов в консоли
+     * @param isFix    - Флаг, показывающий нужно ли исправлять найденные ошибки.
+     * @returns {Promise<any>}
+     */
+    lintPHPFiles(execFunc, isFix = false) {
+        return new Promise((resolve, reject) => {
+            if (typeof execFunc === 'function') {
+                execFunc(`${isFix ? 'phpcbf' : 'phpcs'} --standard=PSR2 ${this.phpPaths.join(' ')}`, (err, stdout) => {
+                    console.log(stdout);
+                    resolve();
+                });
+            } else {
+                reject('exec function is not correct.');
+            }
+        });
     }
 }
 
