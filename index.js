@@ -7,7 +7,7 @@ const executeLinting = async paths => {
         .writeToFile()
         .lintJS();
 
-    await linter.lintPHPFiles(exec)
+    await linter.lintPHPFiles(exec) // TODO: подумать о передаче второго параметра для фикса найденных ошибок.
         .catch(error => {
             if (error) {
                 console.error(`Promise wss failed: ${error}`);

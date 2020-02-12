@@ -8,51 +8,49 @@ const CLIEngine = require("eslint").CLIEngine;
  * class Linter
  */
 class Linter {
-
     /**
      * @constructs Linter
      * @param {string|Array<string>} path - Путь до файла.
      * @param {string} encoding           - Кодировка файла.
      */
     constructor(path, encoding = 'utf8') {
+        this.paths = [];
+        this.encoding = encoding;
         this.fileContents = [];
         this.pathTemp = 'tempLint';
         this.phpExtensions = ['inc', 'mdl', 'php'];
         this.phpPaths = [];
 
         if (path) {
-            if (!Array.isArray(path)) {
-                path = [path];
-            }
-
-            for (let i = 0; i < path.length; i++) {
-                let ext = path[i].split('.');
-                let fileName = path[i].split('/');
-                ext = ext[ext.length - 1];
-                fileName = fileName[fileName.length - 1];
-
-                if (~this.phpExtensions.indexOf(ext)) {
-                    this.phpPaths.push(path[i]);
-                }
-
-                if (ext !== 'frm') {
-                    continue;
-                }
-
-                this.fileContents.push({ path: path[i], content: fs.readFileSync(path[i], encoding), isSubForm: false });
-            }
+            this.paths = !Array.isArray(path) ? [path] : path;
         } else {
-            this.paths = [];
-            this.getFilePaths('.\\', 'frm', ['node_modules', '.git', '.idea', 'temp']);
+            this.getFilePaths('.\\',
+                ['frm', 'php', 'mdl', 'inc'],
+                ['node_modules', '.git', '.idea', 'temp']
+            );
+        }
 
-            this.paths.forEach(p => {
-                this.fileContents.push({ path: p, content: fs.readFileSync(p, encoding) });
+        for (let i = 0; i < this.paths.length; i++) {
+            let ext = this.paths[i].split('.');
+            ext = ext[ext.length - 1];
+
+            // Закидываем файлы с php кодом в отдельный массив.
+            if (~this.phpExtensions.indexOf(ext)) {
+                this.phpPaths.push(this.paths[i]);
+            }
+
+            if (ext !== 'frm') {
+                continue;
+            }
+
+            this.fileContents.push({
+                path: this.paths[i],
+                content: fs.readFileSync(this.paths[i], encoding),
+                isSubForm: false
             });
         }
 
         this.paths = [];
-
-        this.encoding = encoding;
         this.tags = [
             {
                 cmp: 'Script',
@@ -82,10 +80,10 @@ class Linter {
     /**
      * Метод рекурсивно прохоится по всем директориям в проекте и ищет файлы с заданными расширениеми.
      * @param {string|Array<string>} startPath          - Директория, в которой необходимо начать поиск.
-     * @param {string|Array<string>} filter             - Расширения файлов, которые необходимо найти.
+     * @param {string|Array<string>} filters            - Расширения файлов, которые необходимо найти.
      * @param {string|Array<string>|null} exceptionPath - Пути до директорий, которые необходимо пропустить при поиске.
      */
-    getFilePaths(startPath, filter, exceptionPath = null) {
+    getFilePaths(startPath, filters, exceptionPath = null) {
         const self = this;
 
         if (!Array.isArray(exceptionPath)) {
@@ -98,13 +96,17 @@ class Linter {
             const files = fs.readdirSync(startPath);
 
             files.forEach(file => {
-                const filename = path.join(startPath, file);
-                const stat = fs.lstatSync(filename);
+                const fileName = path.join(startPath, file);
+                const stat = fs.lstatSync(fileName);
 
                 if (stat.isDirectory()) {
-                    self.getFilePaths(filename, filter); // recurse
-                } else if (filename.indexOf(filter) >= 0) {
-                    self.paths.push(filename);
+                    self.getFilePaths(fileName, filters); // recurse
+                } else {
+                    filters.forEach(filter => {
+                        if (fileName.includes(`.${filter}`)) {
+                            self.paths.push(fileName);
+                        }
+                    });
                 }
             });
         }
@@ -194,8 +196,8 @@ class Linter {
         const self = this;
         const cmp = 'SubForm';
         const xmlDoc = libxml.parseXmlString(fileContents);
-        const d3SubForm = xmlDoc.find(`./cmp${cmp}`);
-        const m2SubForm = xmlDoc.find(`./component[@cmptype="${cmp}"]`);
+        const d3SubForm = xmlDoc.find(`.//cmp${cmp}`);
+        const m2SubForm = xmlDoc.find(`.//component[@cmptype="${cmp}"]`);
         const subForms = d3SubForm.concat(m2SubForm);
 
         subForms.forEach(subForm => {
@@ -371,16 +373,20 @@ class Linter {
     /**
      * Линтит php файлы, с PHP кодом.
      * @param execFunc - Функция, для выполнения команды линтинга файлов в консоли
-     * @param isFix    - Флаг, показывающий нужно ли исправлять найденные ошибки.
+     * @param isFix - Флаг, показывающий нужно ли исправлять найденные ошибки.
      * @returns {Promise<any>}
      */
     lintPHPFiles(execFunc, isFix = false) {
         return new Promise((resolve, reject) => {
             if (typeof execFunc === 'function') {
-                execFunc(`${isFix ? 'phpcbf' : 'phpcs'} --standard=PSR2 ${this.phpPaths.join(' ')}`, (err, stdout) => {
-                    console.log(stdout);
+                if (this.phpPaths.length > 0) {
+                    execFunc(`${isFix ? 'phpcbf' : 'phpcs'} --standard=PSR2 ${this.phpPaths.join(' ')}`, (err, stdout) => {
+                        console.log(stdout);
+                        resolve();
+                    });
+                } else {
                     resolve();
-                });
+                }
             } else {
                 reject('exec function is not correct.');
             }
