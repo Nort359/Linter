@@ -18,6 +18,7 @@
   },
   "description": "",
   "dependencies": {
-    "libxmljs": "^0.19.5"
+    "libxmljs": "^0.19.5",
+    "yargs": "^15.1.0"
   }
 }

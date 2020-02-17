@@ -1,16 +1,16 @@
 const Linter = require('./classes/Linter');
 const exec = require('child_process').exec;
-
+const argv = require('yargs').argv;
 const executeLinting = async paths => {
     const linter = new Linter(paths)
         .getContentTagsInFile()
         .writeToFile()
         .lintJS();
 
-    await linter.lintPHPFiles(exec) // TODO: подумать о передаче второго параметра для фикса найденных ошибок.
+    await linter.lintPHPFiles(exec, argv.phpFix === 'true')
         .catch(error => {
             if (error) {
-                console.error(`Promise wss failed: ${error}`);
+                console.error(`Произошла ошибка при проверке PHP-кода: ${error}`);
             }
     });
 
@@ -47,9 +47,9 @@ if (+process.env.fromGit === 1) {
         }
 
         executeLinting(modifiedFiles)
-            .catch(error => console.error(`Execute linting was failed: ${error}`));
+            .catch(error => console.error(`При выполнение линтинга произошла ошибка: ${error}`));
     });
 } else {
     executeLinting()
-        .catch(error => console.error(`Execute linting was failed: ${error}`));
+        .catch(error => console.error(`При выполнение линтинга произошла ошибка: ${error}`));
 }

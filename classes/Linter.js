@@ -18,25 +18,44 @@ class Linter {
         this.encoding = encoding;
         this.fileContents = [];
         this.pathTemp = 'tempLint';
+        this.checkExt = ['frm', 'dfrm', 'php', 'mdl', 'inc'];
         this.phpExtensions = ['inc', 'mdl', 'php'];
         this.phpPaths = [];
+        this.jsPaths = [];
 
         if (path) {
             this.paths = !Array.isArray(path) ? [path] : path;
         } else {
             this.getFilePaths('.\\',
-                ['frm', 'php', 'mdl', 'inc'],
-                ['node_modules', '.git', '.idea', 'temp']
+                this.checkExt,
+                ['node_modules', '.git', '.idea', 'temp', 'external']
             );
         }
 
         for (let i = 0; i < this.paths.length; i++) {
             let ext = this.paths[i].split('.');
+            let fileName = this.paths[i].split('/');
+            fileName = fileName.length > 1 ? fileName : this.paths[i].split('\\');
+            fileName = fileName[fileName.length - 1];
             ext = ext[ext.length - 1];
 
             // Закидываем файлы с php кодом в отдельный массив.
             if (~this.phpExtensions.indexOf(ext)) {
                 this.phpPaths.push(this.paths[i]);
+            }
+
+            if (ext === 'js') {
+                const jsTempPath = `${this.pathTemp}/js/${fileName}`;
+
+                if (!fs.existsSync(this.pathTemp)) {
+                    fs.mkdirSync(this.pathTemp);
+                    fs.mkdirSync(this.pathTemp + '/js/');
+                }
+
+                if (fs.existsSync(this.paths[i])) {
+                    fs.writeFileSync(jsTempPath, fs.readFileSync(this.paths[i], 'utf-8'));
+                    this.jsPaths.push({ name: fileName, path: this.paths[i], lintFile: jsTempPath, line: 0 });
+                }
             }
 
             if (ext !== 'frm') {
@@ -182,9 +201,20 @@ class Linter {
             // Обрезаем пустые символы и сиволы переноса строк в самом начале строки.
             this.contents[cmp][i].text = this.contents[cmp][i].text.substr(Linter.findLetterPosition(this.contents[cmp][i].text));
             // Обрезаем пустые символы и сиволы переноса строк в конце строки.
-            var symbolsCount = this.contents[cmp][i].text.length - Linter.findLetterPosition(this.contents[cmp][i].text, false);
+            const symbolsCount = this.contents[cmp][i].text.length - Linter.findLetterPosition(this.contents[cmp][i].text, false);
             this.contents[cmp][i].text = this.contents[cmp][i].text.substr(0, this.contents[cmp][i].text.length - symbolsCount + 1);
         }
+    }
+
+    /**
+     * Возвращает выбранные компоненты для m2 и d3
+     * @param xmlDoc - xmlDoc
+     * @param cmp - Имя компонента
+     * @returns {string}
+     * @private
+     */
+    static _getXPathComponent(xmlDoc, cmp) {
+        return cmp ? xmlDoc.find(`.//cmp${cmp}|.//component[@cmptype="${cmp}"]`) : '';
     }
 
     /**
@@ -194,11 +224,7 @@ class Linter {
      */
     _checkSubForms(fileContents) {
         const self = this;
-        const cmp = 'SubForm';
-        const xmlDoc = libxml.parseXmlString(fileContents);
-        const d3SubForm = xmlDoc.find(`.//cmp${cmp}`);
-        const m2SubForm = xmlDoc.find(`.//component[@cmptype="${cmp}"]`);
-        const subForms = d3SubForm.concat(m2SubForm);
+        const subForms = Linter._getXPathComponent(libxml.parseXmlString(fileContents), 'SubForm');
 
         subForms.forEach(subForm => {
             const path = `Forms\/${subForm.attr('path').value()}.frm`;
@@ -233,33 +259,24 @@ class Linter {
             self.tags.forEach(tag => {
                 const cmp = tag.cmp;
                 const xmlDoc = libxml.parseXmlString(file.content);
-                const d3Nodes = xmlDoc.find(`.//cmp${cmp}`);
-                const m2Nodes = xmlDoc.find(`.//component[@cmptype="${cmp}"]`);
-                const nodes = d3Nodes.concat(m2Nodes);
+                const nodes = Linter._getXPathComponent(xmlDoc, cmp);
 
                 nodes.forEach(node => {
                     const nodeAttrName = node.attr('name');
-                    const line = node.line();
                     const nodeName = nodeAttrName && nodeAttrName.value();
 
                     if (tag.extension === 'sql') {
-                        const d3subActions = xmlDoc.find(`.//cmpSubAction`);
-                        const m2subActions = xmlDoc.find(`.//component[@cmptype="SubAction"]`);
-                        const subActions = d3subActions.concat(m2subActions);
-                        subActions.forEach(subAction => {
-                            subAction.remove();
-                        });
+                        ['SubAction', 'SubSelect'].forEach(subCmp => {
+                            const subNodes = Linter._getXPathComponent(xmlDoc, subCmp);
 
-                        const d3subSelects = xmlDoc.find(`.//cmpSubSelect`);
-                        const m2subSelects = xmlDoc.find(`.//component[@cmptype="SubSelect"]`);
-                        const subSelects = d3subSelects.concat(m2subSelects);
-                        subSelects.forEach(subSelect => {
-                            subSelect.remove();
+                            subNodes.forEach(n => {
+                                n.remove();
+                            });
                         });
                     }
 
                     if (node.text().trim() !== '') {
-                        self._getContent(node.text(), cmp, nodeName, line, file.path, file.isSubForm);
+                        self._getContent(node.text(), cmp, nodeName, node.line(), file.path, file.isSubForm);
                     }
                 });
             });
@@ -295,7 +312,7 @@ class Linter {
 
             Array.isArray(contents[cmp]) && contents[cmp].forEach((content, index) => {
                 const name = content.name;
-                const newFilePath = `${pathTag}/${cmp + '__' + (name ? name : index)}.${dir}`;
+                const newFilePath = `${pathTag}${cmp + '__' + (name ? name : index)}.${dir}`;
                 fs.writeFileSync(newFilePath, content.text);
                 this.contents[cmp][index].lintFile = newFilePath;
             });
@@ -319,14 +336,20 @@ class Linter {
             useEslintrc: true
         });
 
+        // console.log('contents', contents);
+
+        contents['Script'] = contents['Script'].concat(this.jsPaths);
+
         Array.isArray(contents['Script']) && contents['Script'].forEach(content => {
             const report = cli.executeOnFiles(content.lintFile);
+
+            console.log('content', content);
 
             report.results.forEach(function(result) {
                 const fileName = result.filePath.split('\\');
 
                 console.log('\nФайл' + (content.isSubForm ? ' (Сабформа)' : '') + ': ' + chalk.green(content.path) +
-                    ', строка, на которой находится тег: ' + chalk.green(content.line) +
+                    (content.line !== 0 ? ', строка, на которой находится тег: ' + chalk.green(content.line) : '') +
                     ', имя тега: ' + chalk.green(content.name ? content.name : '[Атрибут \'name\' у тега \'Script\' отсутсвует]') + '.');
 
                 if (result.errorCount === 0) {
@@ -388,7 +411,7 @@ class Linter {
                     resolve();
                 }
             } else {
-                reject('exec function is not correct.');
+                reject('Передана некорректная exec функция.');
             }
         });
     }
