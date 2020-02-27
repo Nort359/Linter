@@ -86,8 +86,21 @@ if (+argv.fromGit === 1) {
                     let lines = message.split('\n');
 
                     lines.forEach(line => {
-                        if (line.includes('modified') || line.includes('new file') || line.includes('renamed')) {
-                            const filePath = line.split(':')[1].trim();
+                        /*
+                           При перемещении Git добавляет удалённые в файлы и в блок new files и в deleted.
+                           Если файл встретился и в тои и в том блоке - пропускаем такой файл, т.к. считаем его удалённым.
+                        */
+                        const gitStatusArray = line.split(':');
+                        const gitStatus = gitStatusArray[0] && gitStatusArray[0].trim();
+                        const isDeleted = gitStatus === 'new file' && gitStatus === 'deleted';
+                        const isChanged = gitStatus === 'modified' || gitStatus === 'new file' || gitStatus === 'renamed';
+                        let filePath = gitStatusArray[1] && gitStatusArray[1].trim();
+
+                        if (filePath && filePath.includes(' -> ')) {
+                            filePath = filePath.split(' -> ')[1].trim();
+                        }
+
+                        if (isChanged && !isDeleted) {
                             addOrGetPaths(filePath);
                         }
                     });
@@ -99,7 +112,7 @@ if (+argv.fromGit === 1) {
                     .catch(error => console.error(`При выполнение линтинга произошла ошибка: ${error}`));
             });
         })
-        .catch(error => console.error(error));
+        .catch(error => console.error(`При выполнение линтинга произошла ошибка: ${error}`));
 } else {
     executeLinting()
         .catch(error => console.error(`При выполнение линтинга произошла ошибка: ${error}`));
