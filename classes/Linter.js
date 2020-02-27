@@ -54,7 +54,12 @@ class Linter {
 
                 if (fs.existsSync(this.paths[i])) {
                     fs.writeFileSync(jsTempPath, fs.readFileSync(this.paths[i], 'utf-8'));
-                    this.jsPaths.push({ name: fileName, path: this.paths[i], lintFile: jsTempPath, line: 0 });
+                    this.jsPaths.push({
+                        name: fileName,
+                        path: this.paths[i],
+                        lintFile: jsTempPath,
+                        line: 0
+                    });
                 }
             }
 
@@ -94,6 +99,10 @@ class Linter {
         ];
 
         this.contents = {};
+
+        this.tags.forEach(tag => {
+            this.contents[tag.cmp] = [];
+        });
     }
 
     /**
@@ -178,7 +187,14 @@ class Linter {
 
         let i = this.contents[cmp].length;
 
-        this.contents[cmp].push({ text: node, name: nodeName, path: path, line: line, isSubForm: isSubForm });
+        this.contents[cmp].push({
+            text: node,
+            cmp: cmp,
+            name: nodeName,
+            path: path,
+            line: line,
+            isSubForm: isSubForm
+        });
 
         if (this.contents[cmp][i].text) {
             let firstSymbolPosition = -1;
@@ -336,21 +352,17 @@ class Linter {
             useEslintrc: true
         });
 
-        // console.log('contents', contents);
-
         contents['Script'] = contents['Script'].concat(this.jsPaths);
 
         Array.isArray(contents['Script']) && contents['Script'].forEach(content => {
             const report = cli.executeOnFiles(content.lintFile);
 
-            console.log('content', content);
-
             report.results.forEach(function(result) {
                 const fileName = result.filePath.split('\\');
 
                 console.log('\nФайл' + (content.isSubForm ? ' (Сабформа)' : '') + ': ' + chalk.green(content.path) +
-                    (content.line !== 0 ? ', строка, на которой находится тег: ' + chalk.green(content.line) : '') +
-                    ', имя тега: ' + chalk.green(content.name ? content.name : '[Атрибут \'name\' у тега \'Script\' отсутсвует]') + '.');
+                    (content.line !== 0 ? ', тег \'' + content.cmp + '\' на строке: ' + chalk.green(content.line) : '') +
+                    ', имя скрипта: ' + chalk.green(content.name ? content.name : '[Атрибут \'name\' у тега \'Script\' отсутсвует]') + '.');
 
                 if (result.errorCount === 0) {
                     console.log(chalk.green('+ Замечаний к файлу нет.'));
@@ -369,26 +381,40 @@ class Linter {
         return this;
     }
 
-    /**
-     * Удаляет временные файлы, созданные для выполнения линтинга.
-     * @param path - Путь, по которому будут удаляться временные файлы.
-     * @returns {Linter}
-     */
-    deleteTempFiles(path = this.pathTemp) {
-        const self = this;
+    lintTables(contents = this.contents) {
+        let match = [];
+        let sql = [];
+        const regex = new RegExp(`(^|FROM|JOIN)\\s+D_(?!PKG|CL_|V_|C_|P_|STR|TP_|F_)\\S+`, 'gim');
 
-        if (fs.existsSync(path)) {
-            fs.readdirSync(path).forEach(file => {
-                const curPath = path + '/' + file;
-                if (fs.lstatSync(curPath).isDirectory()) { // recurse
-                    self.deleteTempFiles(curPath);
-                } else { // delete file
-                    fs.unlinkSync(curPath);
+        // Помещаем все теги
+        this.tags.forEach(tag => {
+            if (tag.extension === 'sql') {
+                sql = sql.concat(contents[tag.cmp]);
+            }
+        });
+
+        sql.forEach(sqlTag => {
+            const sqlFile = fs.readFileSync(sqlTag.lintFile, this.encoding);
+
+            while (match = regex.exec(sqlFile)) {
+                let sqlLines = match.input.split('\n');
+                let lineError = 0;
+                let strMatches = match[0].split(' ');
+                const tableName = strMatches && strMatches[strMatches.length - 1];
+
+                if (sqlLines) {
+                    for (let i = 0; i < sqlLines.length; i++) {
+                        if (sqlLines[i].includes(match[0])) {
+                            lineError = i;
+                            break;
+                        }
+                    }
                 }
-            });
 
-            fs.rmdirSync(path);
-        }
+                console.log(`Найдено использование таблицы ${chalk.red(tableName)} в запросе компонента `
+                    + `${sqlTag.cmp} с именем ${chalk.green(sqlTag.name)} в файле ${chalk.green(sqlTag.path)}, на строке: ${lineError + sqlTag.line}`);
+            }
+        });
 
         return this;
     }
@@ -414,6 +440,30 @@ class Linter {
                 reject('Передана некорректная exec функция.');
             }
         });
+    }
+
+    /**
+     * Удаляет временные файлы, созданные для выполнения линтинга.
+     * @param path - Путь, по которому будут удаляться временные файлы.
+     * @returns {Linter}
+     */
+    deleteTempFiles(path = this.pathTemp) {
+        const self = this;
+
+        if (fs.existsSync(path)) {
+            fs.readdirSync(path).forEach(file => {
+                const curPath = path + '/' + file;
+                if (fs.lstatSync(curPath).isDirectory()) { // recurse
+                    self.deleteTempFiles(curPath);
+                } else { // delete file
+                    fs.unlinkSync(curPath);
+                }
+            });
+
+            fs.rmdirSync(path);
+        }
+
+        return this;
     }
 }
 

@@ -204,8 +204,8 @@
             select t.AGENT_PAT, coalesce((select min(d.DATE_IN) from D_V_ZNO_DATA d where d.PID = t1.ID),t1.REGISTR_DATE), t2.BIRTHDATE
               into nAGENT, :LPU_REG_DATE, dBIRTHDATE
               from D_V_NR_REQUEST t
-                   join D_V_NR_PATIENTS t1 on t1.AGENT_ID = t.AGENT_PAT and t1.VERSION = D_PKG_VERSIONS.GET_VERSION_BY_LPU(0, :LPU, 'NR_PATIENTS')
-                        join D_V_AGENTS_BASE t2 on t2.ID = t1.AGENT_ID
+                   join D_NR_PATIENTS t1 on t1.AGENT_ID = t.AGENT_PAT and t1.VERSION = D_PKG_VERSIONS.GET_VERSION_BY_LPU(0, :LPU, 'NR_PATIENTS')
+                        join D_AGENTS_BASE t2 on t2.ID = t1.AGENT_ID
              where t.ID = :NR_REQUEST;
           exception when NO_DATA_FOUND or TOO_MANY_ROWS then
             return;
@@ -238,7 +238,7 @@
               :LPU_REG_NAME := get_caption(nLPU, :LPU_REG, 'LPUDICT', 'LPUDICT_BY_LPU');
               select t.ID
                 into :REGISTER_PURPOSE
-                from D_V_REGISTER_PURPOSES t
+                from D_REGISTER_PURPOSES t
                where t.RP_CODE = sRP_CODE
                  and t.VERSION = D_PKG_VERSIONS.GET_VERSION_BY_LPU(1,nLPU,'REGISTER_PURPOSES');
                 begin
@@ -364,3 +364,6 @@
     </cmpAction>
     <cmpSubForm path="NR/subforms/commentary"/> <!-- SendComment -->
 </div>
+
+
+
