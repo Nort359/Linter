@@ -15,7 +15,7 @@ const executeLinting = async paths => {
             }
     });
 
-    linter.deleteTempFiles();
+    // linter.deleteTempFiles();
 };
 
 const setPaths = () => {
@@ -92,7 +92,7 @@ if (+argv.fromGit === 1) {
                         */
                         const gitStatusArray = line.split(':');
                         const gitStatus = gitStatusArray[0] && gitStatusArray[0].trim();
-                        const isDeleted = gitStatus === 'new file' && gitStatus === 'deleted';
+                        const isDeleted = gitStatus === 'deleted';
                         const isChanged = gitStatus === 'modified' || gitStatus === 'new file' || gitStatus === 'renamed';
                         let filePath = gitStatusArray[1] && gitStatusArray[1].trim();
 

@@ -2,10 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
 const libxml = require('libxmljs');
-const CLIEngine = require("eslint").CLIEngine;
+const CLIEngine = require('eslint').CLIEngine;
 
 /**
- * class Linter
+ * Class Linter
  */
 class Linter {
     /**
@@ -26,10 +26,13 @@ class Linter {
         if (path) {
             this.paths = !Array.isArray(path) ? [path] : path;
         } else {
-            this.getFilePaths('.\\',
-                this.checkExt,
-                ['node_modules', '.git', '.idea', 'temp', 'external']
-            );
+            this.getFilePaths('.\\', this.checkExt, [
+                'node_modules',
+                '.git',
+                '.idea',
+                'temp',
+                'external'
+            ]);
         }
 
         for (let i = 0; i < this.paths.length; i++) {
@@ -298,7 +301,8 @@ class Linter {
             });
 
             // Рекурсивно проходимся по всем сабформам.
-            self._checkSubForms(file.content);
+            // Раскомментировать при необходимости линтить сабформы.
+            // self._checkSubForms(file.content);
         });
 
         return self;
@@ -381,6 +385,12 @@ class Linter {
         return this;
     }
 
+    /**
+     * Метод линтит все sql файлы на предмет использование таблиц в запросе
+     * и выводит ошибки в консоль если совпадения были найдены.
+     * @param contents - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
+     * @return {Linter}
+     */
     lintTables(contents = this.contents) {
         let match = [];
         let sql = [];
@@ -412,7 +422,7 @@ class Linter {
                 }
 
                 console.log(`Найдено использование таблицы ${chalk.red(tableName)} в запросе компонента `
-                    + `${sqlTag.cmp} с именем ${chalk.green(sqlTag.name)} в файле ${chalk.green(sqlTag.path)}, на строке: ${lineError + sqlTag.line}`);
+                    + `${sqlTag.cmp} с именем ${chalk.green(sqlTag.name)} в файле ${chalk.green(sqlTag.path)}, на строке: ${lineError + sqlTag.line + 1}`);
             }
         });
 
