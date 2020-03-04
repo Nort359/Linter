@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
-const libxml = require('libxmljs');
-const CLIEngine = require('eslint').CLIEngine;
+const libxml = require('libxmljs'),
+    {CLIEngine} = require('eslint');
 
 /**
  * Class Linter
@@ -10,21 +10,31 @@ const CLIEngine = require('eslint').CLIEngine;
 class Linter {
     /**
      * @constructs Linter
-     * @param {string|Array<string>} path - Путь до файла.
+     * @param {string|Array<string>} filePath - Путь до файла.
      * @param {string} encoding           - Кодировка файла.
      */
-    constructor(path, encoding = 'utf8') {
+    constructor(filePath, encoding = 'utf8') {
         this.paths = [];
         this.encoding = encoding;
         this.fileContents = [];
         this.pathTemp = 'tempLint';
-        this.checkExt = ['frm', 'dfrm', 'php', 'mdl', 'inc'];
-        this.phpExtensions = ['inc', 'mdl', 'php'];
+        this.checkExt = [
+            'frm',
+            'dfrm',
+            'php',
+            'mdl',
+            'inc'
+        ];
+        this.phpExtensions = [
+            'inc',
+            'mdl',
+            'php'
+        ];
         this.phpPaths = [];
         this.jsPaths = [];
 
-        if (path) {
-            this.paths = !Array.isArray(path) ? [path] : path;
+        if (filePath) {
+            this.paths = !Array.isArray(filePath) ? [filePath] : filePath;
         } else {
             this.getFilePaths('.\\', this.checkExt, [
                 'node_modules',
@@ -36,8 +46,9 @@ class Linter {
         }
 
         for (let i = 0; i < this.paths.length; i++) {
-            let ext = this.paths[i].split('.');
-            let fileName = this.paths[i].split('/');
+            let ext = this.paths[i].split('.'),
+                fileName = this.paths[i].split('/');
+
             fileName = fileName.length > 1 ? fileName : this.paths[i].split('\\');
             fileName = fileName[fileName.length - 1];
             ext = ext[ext.length - 1];
@@ -52,7 +63,7 @@ class Linter {
 
                 if (!fs.existsSync(this.pathTemp)) {
                     fs.mkdirSync(this.pathTemp);
-                    fs.mkdirSync(this.pathTemp + '/js/');
+                    fs.mkdirSync(`${this.pathTemp}/js/`);
                 }
 
                 if (fs.existsSync(this.paths[i])) {
@@ -103,9 +114,36 @@ class Linter {
 
         this.contents = {};
 
-        this.tags.forEach(tag => {
+        this.tags.forEach((tag) => {
             this.contents[tag.cmp] = [];
         });
+    }
+
+    /**
+     * Проверяет является ли символ пустым символом.
+     * @param {string} symbol - Символ, который необходимо проверить.
+     * @return {boolean}      - true - не пустой, false - пустой.
+     */
+    static isLetter(symbol) {
+        return symbol.toUpperCase() !== symbol.toLowerCase();
+    }
+
+    /**
+     * Находит позицию первого не пустого символа.
+     * @param {string} str - Строка, где необходимо производить поиск.
+     * @return {number}    - Позиция первого не пустого символа.
+     */
+    static findFirstLetterPosition(str) {
+        let position = -1;
+
+        for (let j = 0; j <= str.length; j++) {
+            if (str[j] && Linter.isLetter(str[j])) {
+                position = j;
+                break;
+            }
+        }
+
+        return position;
     }
 
     /**
@@ -122,18 +160,20 @@ class Linter {
         }
 
         if (!~exceptionPath.indexOf(startPath)) {
-            if (!fs.existsSync(startPath)) return;
+            if (!fs.existsSync(startPath)) {
+                return;
+            }
 
             const files = fs.readdirSync(startPath);
 
-            files.forEach(file => {
-                const fileName = path.join(startPath, file);
-                const stat = fs.lstatSync(fileName);
+            files.forEach((file) => {
+                const fileName = path.join(startPath, file),
+                    stat = fs.lstatSync(fileName);
 
                 if (stat.isDirectory()) {
-                    self.getFilePaths(fileName, filters); // recurse
+                    self.getFilePaths(fileName, filters); // Recurse
                 } else {
-                    filters.forEach(filter => {
+                    filters.forEach((filter) => {
                         if (fileName.includes(`.${filter}`)) {
                             self.paths.push(fileName);
                         }
@@ -156,14 +196,14 @@ class Linter {
 
         if (fromBegin) {
             for (let i = 0; i <= str.length; i++) {
-                if (str[i] && /\S/.test(str[i])) {
+                if (str[i] && (/\S/).test(str[i])) {
                     position = i;
                     break;
                 }
             }
         } else {
             for (let i = str.length; i >= 0; i--) {
-                if (str[i] && /\S/.test(str[i])) {
+                if (str[i] && (/\S/).test(str[i])) {
                     position = i;
                     break;
                 }
@@ -174,43 +214,48 @@ class Linter {
     }
 
     /**
-     * private
+     * Private
      * Получает содержимое переданного тега в файле и помещает его в this.contents
-     * @param {string} node      - Содержимое тега.
+     * @param {object} file      - Содержимое файла.
+     * @param {object} node      - Содержимое тега.
      * @param {string} cmp       - Имя тега.
      * @param {string} nodeName  - Атрибут name на компоненте.
-     * @param {number} line      - Номер строки исходного файла, где был обнаружен текущий тег.
-     * @param {string} path      - Путь до проверяемого файла.
-     * @param {string} isSubForm - Является ли файл сабформой.
      */
-    _getContent(node, cmp, nodeName, line, path, isSubForm) {
+    _getContent(file, node, cmp, nodeName) {
+        const {path} = file, // Путь до проверяемого файла.
+            {isSubForm} = file, // Флаг-показатель, является ли файл сабформой.
+            line = node.line(), // Номер строки исходного файла, где был обнаружен текущий тег.
+            nodeText = node.text(); // Содержимое тега.
+
         if (!Array.isArray(this.contents[cmp])) {
             this.contents[cmp] = [];
         }
 
-        let i = this.contents[cmp].length;
+        const i = this.contents[cmp].length;
 
         this.contents[cmp].push({
-            text: node,
-            cmp: cmp,
+            file,
+            node,
+            text: nodeText,
+            cmp,
             name: nodeName,
-            path: path,
-            line: line,
-            isSubForm: isSubForm
+            path,
+            line,
+            isSubForm
         });
 
         if (this.contents[cmp][i].text) {
             let firstSymbolPosition = -1;
             
             // Убираем лишние пробелы перед каждой строкой.
-            this.contents[cmp][i].text = this.contents[cmp][i].text.split('\n').map(line => {
+            this.contents[cmp][i].text = this.contents[cmp][i].text.split('\n').map((line) => {
                 // Находим позицию первого не пустого символа.
                 if (firstSymbolPosition === -1) {
                     firstSymbolPosition = Linter.findLetterPosition(line);
                 }
 
                 // Пропускаем пустые строки, а в не пустых убираем лишнее количество табов и пробелов.
-                return line = line.trim() !== '' ? line.substr(firstSymbolPosition) + '\n' : line + '\n';
+                return line = line.trim() !== '' ? `${line.substr(firstSymbolPosition)}\n` : `${line}\n`;
             });
 
             if (Array.isArray(this.contents[cmp][i].text)) {
@@ -221,14 +266,15 @@ class Linter {
             this.contents[cmp][i].text = this.contents[cmp][i].text.substr(Linter.findLetterPosition(this.contents[cmp][i].text));
             // Обрезаем пустые символы и сиволы переноса строк в конце строки.
             const symbolsCount = this.contents[cmp][i].text.length - Linter.findLetterPosition(this.contents[cmp][i].text, false);
+
             this.contents[cmp][i].text = this.contents[cmp][i].text.substr(0, this.contents[cmp][i].text.length - symbolsCount + 1);
         }
     }
 
     /**
      * Возвращает выбранные компоненты для m2 и d3
-     * @param xmlDoc - xmlDoc
-     * @param cmp - Имя компонента
+     * @param {object} xmlDoc - xmlDoc
+     * @param {string} cmp - Имя компонента
      * @returns {string}
      * @private
      */
@@ -237,23 +283,26 @@ class Linter {
     }
 
     /**
-     * private
+     * Private
      * Ищет все сабформы на форме и получает из них контент вызывая метод this.getContentTagsInFile.
      * @param {string} fileContents - Содержимое файла.
      */
     _checkSubForms(fileContents) {
-        const self = this;
-        const subForms = Linter._getXPathComponent(libxml.parseXmlString(fileContents), 'SubForm');
+        const self = this,
+            subForms = Linter._getXPathComponent(libxml.parseXmlString(fileContents), 'SubForm');
 
-        subForms.forEach(subForm => {
+        subForms.forEach((subForm) => {
             const path = `Forms\/${subForm.attr('path').value()}.frm`;
 
             if (fs.existsSync(path)) {
                 const subFormContent = [];
-                subFormContent.push({ path: path, content: fs.readFileSync(path, this.encoding), isSubForm: true });
+
+                subFormContent.push({path,
+                    content: fs.readFileSync(path, this.encoding),
+                    isSubForm: true});
                 self.getContentTagsInFile(subFormContent);
             } else {
-                console.error('Не найдена сабформа ' + chalk.red(path));
+                console.error(`Не найдена сабформа ${chalk.red(path)}`);
             }
         });
     }
@@ -266,6 +315,7 @@ class Linter {
      * {
      *      имя_тега: [] - Массив с кодом всех тегов.
      * }
+     * @return {object<Linter>}
      */
     getContentTagsInFile(fileContents = this.fileContents) {
         const self = this;
@@ -274,35 +324,40 @@ class Linter {
             fileContents = [fileContents];
         }
 
-        fileContents.forEach(file => {
-            self.tags.forEach(tag => {
-                const cmp = tag.cmp;
-                const xmlDoc = libxml.parseXmlString(file.content);
-                const nodes = Linter._getXPathComponent(xmlDoc, cmp);
+        fileContents.forEach((file) => {
+            self.tags.forEach((tag) => {
+                const {cmp} = tag,
+                    xmlDoc = libxml.parseXmlString(file.content),
+                    nodes = Linter._getXPathComponent(xmlDoc, cmp);
 
-                nodes.forEach(node => {
-                    const nodeAttrName = node.attr('name');
-                    const nodeName = nodeAttrName && nodeAttrName.value();
+                nodes.forEach((node) => {
+                    const nodeAttrName = node.attr('name'),
+                        nodeName = nodeAttrName && nodeAttrName.value();
 
                     if (tag.extension === 'sql') {
-                        ['SubAction', 'SubSelect'].forEach(subCmp => {
+                        [
+                            'SubAction',
+                            'SubSelect'
+                        ].forEach((subCmp) => {
                             const subNodes = Linter._getXPathComponent(xmlDoc, subCmp);
 
-                            subNodes.forEach(n => {
+                            subNodes.forEach((n) => {
                                 n.remove();
                             });
                         });
                     }
 
                     if (node.text().trim() !== '') {
-                        self._getContent(node.text(), cmp, nodeName, node.line(), file.path, file.isSubForm);
+                        self._getContent(file, node, cmp, nodeName);
                     }
                 });
             });
 
-            // Рекурсивно проходимся по всем сабформам.
-            // Раскомментировать при необходимости линтить сабформы.
-            // self._checkSubForms(file.content);
+            /*
+             * Рекурсивно проходимся по всем сабформам.
+             * Раскомментировать при необходимости линтить сабформы.
+             * self._checkSubForms(file.content);
+             */
         });
 
         return self;
@@ -315,24 +370,26 @@ class Linter {
      * {
      *      имя_тега: [] - Массив с кодом всех тегов.
      * }
+     * @return {object<Linter>}
      */
     writeToFile(contents = this.contents) {
         if (!fs.existsSync(this.pathTemp)) {
             fs.mkdirSync(this.pathTemp);
         }
 
-        this.tags.forEach(tag => {
-            const dir = tag.extension;
-            const cmp = tag.cmp;
-            const pathTag = `${this.pathTemp}/${dir}/`;
+        this.tags.forEach((tag) => {
+            const dir = tag.extension,
+                {cmp} = tag,
+                pathTag = `${this.pathTemp}/${dir}/`;
 
             if (!fs.existsSync(pathTag)) {
                 fs.mkdirSync(pathTag);
             }
 
             Array.isArray(contents[cmp]) && contents[cmp].forEach((content, index) => {
-                const name = content.name;
-                const newFilePath = `${pathTag}${cmp + '__' + (name ? name : index)}.${dir}`;
+                const {name} = content,
+                    newFilePath = `${pathTag}${`${cmp}__${name ? name : index}`}.${dir}`;
+
                 fs.writeFileSync(newFilePath, content.text);
                 this.contents[cmp][index].lintFile = newFilePath;
             });
@@ -342,40 +399,102 @@ class Linter {
     }
 
     /**
+     * Заменяет содержимое тега на исправленный.
+     * @param {object} content - Содержание всей формы.
+     * @param {string} replaceText - Заменяемый текст.
+     * @return {string}
+     */
+    replaceFixedTag(content, replaceText) {
+        const nodeLines = content.node.text().split('\n');
+        let spaces = '',
+            indentNodeText = 0,
+            output = replaceText,
+            nodeText = content.node.text(),
+            documentRoot = content.file.content;
+
+        // Определяем количество отступов в оригинальном тексте.
+        for (let i = 0; i < nodeLines.length; i++) {
+            const charPosition = Linter.findFirstLetterPosition(nodeLines[i]);
+
+            if (charPosition > -1) {
+                indentNodeText = charPosition;
+                break;
+            }
+        }
+
+        // Помещаем отступы из оригинального текста в переменную.
+        for (let i = 0; i < indentNodeText; i++) {
+            spaces += ' ';
+        }
+
+        // Добавляем отступы из оригинального текста в заменяемый текст
+        output = output.split('\n').map((line) => spaces + line);
+        output = `${output.join('\n').trim()}`;
+
+        const unixText = nodeText.trim(); // При переносе строки только \n
+        let windowsText = unixText; // При переносе строки \r\n
+
+        if (!nodeText.includes('\r\r')) {
+            windowsText = nodeText.trim().replace(/\n/gim, '\r\n');
+        }
+
+        if (documentRoot.includes(unixText)) {
+            documentRoot = documentRoot.replace(unixText, output);
+        } else if (documentRoot.includes(windowsText)) {
+            documentRoot = documentRoot.replace(windowsText, output);
+        }
+
+        documentRoot = documentRoot.replace(nodeText.trim().replace(/\n/gim, '\r\n'), output);
+
+        return documentRoot;
+    }
+
+    /**
      * Метод линтит переданные JS файлы и выводит найденные ошибки в консоль.
+     * @param {boolean} isFix - Флаг, показывающий нужно ли исправлять найденные ошибки.
      * @param {object} contents - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
      * Структура:
      * {
      *      имя_тега: [] - Массив с кодом всех тегов.
      * }
+     * @return {object<Linter>}
      */
-    lintJS(contents = this.contents) {
-        const cli = new CLIEngine({
-            envs: ['browser', 'mocha'],
-            fix: false,
-            useEslintrc: true
-        });
+    lintJS(isFix = false, contents = this.contents) {
+        const self = this,
+            cli = new CLIEngine({
+                envs: [
+                    'browser',
+                    'mocha'
+                ],
+                fix: isFix,
+                useEslintrc: true
+            });
 
         contents['Script'] = contents['Script'].concat(this.jsPaths);
 
-        Array.isArray(contents['Script']) && contents['Script'].forEach(content => {
+        Array.isArray(contents['Script']) && contents['Script'].forEach((content) => {
             const report = cli.executeOnFiles(content.lintFile);
 
             report.results.forEach(function(result) {
-                const fileName = result.filePath.split('\\');
+                // Если существует значение у content.cmp - значит имеем дело с тегом.
+                if (content.cmp && result.output) {
+                    fs.writeFileSync(content.path, self.replaceFixedTag(content, result.output));
+                } else if (result.output) {
+                    fs.writeFileSync(content.path, result.output);
+                }
 
-                console.log('\nФайл' + (content.isSubForm ? ' (Сабформа)' : '') + ': ' + chalk.green(content.path) +
-                    (content.line !== 0 ? ', тег \'' + content.cmp + '\' на строке: ' + chalk.green(content.line) : '') +
-                    ', имя скрипта: ' + chalk.green(content.name ? content.name : '[Атрибут \'name\' у тега \'Script\' отсутсвует]') + '.');
+                console.log(`\nФайл${content.isSubForm ? ' (Сабформа)' : ''}: ${chalk.green(content.path)
+                }${content.line !== 0 ? `, тег '${content.cmp}' на строке: ${chalk.green(content.line)}` : ''
+                }, имя скрипта: ${chalk.green(content.name ? content.name : '[Атрибут \'name\' у тега \'Script\' отсутсвует]')}.`);
 
                 if (result.errorCount === 0) {
                     console.log(chalk.green('+ Замечаний к файлу нет.'));
                 } else {
-                    console.log('Найдено ' + chalk.red(result.errorCount  + ' ошибок') + ' и ' + chalk.yellow(result.warningCount + ' предупреждений') + '.\n');
+                    console.log(`Найдено ${chalk.red(`${result.errorCount} ошибок`)} и ${chalk.yellow(`${result.warningCount} предупреждений`)}.\n`);
                 }
 
                 result.messages.forEach(function(message) {
-                    console.log('Строка: ' + (content.line + message.line + 1) + ', Столбец: ' + message.column + ': ' + chalk.red(message.ruleId) + ' ' + message.message);
+                    console.log(`Строка: ${content.line + message.line + 1}, Столбец: ${message.column}: ${chalk.red(message.ruleId)} ${message.message}`);
                 });
 
                 console.log('\n-------------------------------------\n');
@@ -388,29 +507,29 @@ class Linter {
     /**
      * Метод линтит все sql файлы на предмет использование таблиц в запросе
      * и выводит ошибки в консоль если совпадения были найдены.
-     * @param contents - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
-     * @return {Linter}
+     * @param {object} contents - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
+     * @return {object<Linter>}
      */
     lintTables(contents = this.contents) {
-        let match = [];
-        let sql = [];
-        const regex = new RegExp(`(^|FROM|JOIN)\\s+D_(?!PKG|CL_|V_|C_|P_|STR|TP_|F_)\\S+`, 'gim');
+        let match = [],
+            sql = [];
+        const regex = new RegExp('(^|FROM|JOIN)\\s+D_(?!PKG|CL_|V_|C_|P_|STR|TP_|F_)\\S+', 'gim');
 
         // Помещаем все теги
-        this.tags.forEach(tag => {
+        this.tags.forEach((tag) => {
             if (tag.extension === 'sql') {
                 sql = sql.concat(contents[tag.cmp]);
             }
         });
 
-        sql.forEach(sqlTag => {
+        sql.forEach((sqlTag) => {
             const sqlFile = fs.readFileSync(sqlTag.lintFile, this.encoding);
 
             while (match = regex.exec(sqlFile)) {
-                let sqlLines = match.input.split('\n');
+                const sqlLines = match.input.split('\n'),
+                    strMatches = match[0].split(' '),
+                    tableName = strMatches && strMatches[strMatches.length - 1];
                 let lineError = 0;
-                let strMatches = match[0].split(' ');
-                const tableName = strMatches && strMatches[strMatches.length - 1];
 
                 if (sqlLines) {
                     for (let i = 0; i < sqlLines.length; i++) {
@@ -421,8 +540,8 @@ class Linter {
                     }
                 }
 
-                console.log(`Найдено использование таблицы ${chalk.red(tableName)} в запросе компонента `
-                    + `${sqlTag.cmp} с именем ${chalk.green(sqlTag.name)} в файле ${chalk.green(sqlTag.path)}, на строке: ${lineError + sqlTag.line + 1}`);
+                console.log(`Найдено использование таблицы ${chalk.red(tableName)} в запросе компонента ` +
+                    `${sqlTag.cmp} с именем ${chalk.green(sqlTag.name)} в файле ${chalk.green(sqlTag.path)}, на строке: ${lineError + sqlTag.line + 1}`);
             }
         });
 
@@ -431,8 +550,8 @@ class Linter {
 
     /**
      * Линтит php файлы, с PHP кодом.
-     * @param execFunc - Функция, для выполнения команды линтинга файлов в консоли
-     * @param isFix - Флаг, показывающий нужно ли исправлять найденные ошибки.
+     * @param {function} execFunc - Функция, для выполнения команды линтинга файлов в консоли
+     * @param {boolean} isFix - Флаг, показывающий нужно ли исправлять найденные ошибки.
      * @returns {Promise<any>}
      */
     lintPHPFiles(execFunc, isFix = false) {
@@ -454,18 +573,19 @@ class Linter {
 
     /**
      * Удаляет временные файлы, созданные для выполнения линтинга.
-     * @param path - Путь, по которому будут удаляться временные файлы.
-     * @returns {Linter}
+     * @param {string} path - Путь, по которому будут удаляться временные файлы.
+     * @return {object<Linter>}
      */
     deleteTempFiles(path = this.pathTemp) {
         const self = this;
 
         if (fs.existsSync(path)) {
-            fs.readdirSync(path).forEach(file => {
-                const curPath = path + '/' + file;
-                if (fs.lstatSync(curPath).isDirectory()) { // recurse
+            fs.readdirSync(path).forEach((file) => {
+                const curPath = `${path}/${file}`;
+
+                if (fs.lstatSync(curPath).isDirectory()) { // Recurse
                     self.deleteTempFiles(curPath);
-                } else { // delete file
+                } else { // Delete file
                     fs.unlinkSync(curPath);
                 }
             });
