@@ -1,4 +1,5 @@
 const Linter = require('./classes/Linter'),
+    fs = require('fs'),
     {exec} = require('child_process');
 const {argv} = require('yargs'),
     executeLinting = async (paths) => {
@@ -37,6 +38,13 @@ const {argv} = require('yargs'),
 
 if (!argv.fromGit) {
     argv.fromGit = 1;
+}
+
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf-8'));
+let absPathRepo = __dirname.replace(/\\/g, '/');
+
+if (absPathRepo.includes(config.linterPath)) {
+    absPathRepo = absPathRepo.replace(config.linterPath, '');
 }
 
 if (+argv.fromGit === 1) {
@@ -81,9 +89,11 @@ if (+argv.fromGit === 1) {
                 const reg = /(--- a\/)|(\+\+\+ b\/)/;
 
                 if (reg.test(line)) {
-                    const path = line.replace(reg, '');
+                    const path = absPathRepo + line.replace(reg, '');
 
-                    addOrGetPaths(path);
+                    if (!addOrGetPaths().includes(path)) {
+                        addOrGetPaths(path);
+                    }
                 }
             });
 
