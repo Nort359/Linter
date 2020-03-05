@@ -460,6 +460,8 @@ class Linter {
      * @return {object<Linter>}
      */
     lintJS(isFix = false, contents = this.contents) {
+        console.log('\n\n================================= JavaScript =================================\n\n');
+
         const self = this,
             cli = new CLIEngine({
                 envs: [
@@ -469,6 +471,8 @@ class Linter {
                 fix: isFix,
                 useEslintrc: true
             });
+
+        let globalErrorCount = 0;
 
         contents['Script'] = contents['Script'].concat(this.jsPaths);
 
@@ -495,11 +499,102 @@ class Linter {
 
                 result.messages.forEach(function(message) {
                     console.log(`Строка: ${content.line + message.line + 1}, Столбец: ${message.column}: ${chalk.red(message.ruleId)} ${message.message}`);
+                    globalErrorCount++;
                 });
 
                 console.log('\n-------------------------------------\n');
             });
         });
+
+        if (globalErrorCount === 0) {
+            console.log('Ошибки не обнаружены\n');
+        } else {
+            console.log(`Всего обнаружено ошибок: ${globalErrorCount}\n`);
+        }
+
+        return this;
+    }
+
+    /**
+     * Производит проверку параметров привязанных к запросам.
+     * @param {array} sql - Массив всех собранных sql запросов.
+     * @return {object<Linter>}
+     */
+    _checkUseSqlParams(sql) {
+        console.log('*** Проверка переданных/используемых параметров ***\n');
+
+        const sqlTags = Array.isArray(sql) ? sql : [sql];
+        let match = [],
+            isError = false;
+
+        sqlTags.forEach((sqlTag) => {
+            const {cmp} = sqlTag,
+                vars = sqlTag.node.find(`./cmp${cmp}Var|./component[@cmptype="${cmp}Var"]|./component[@cmptype="Variable"]`),
+                regCheckUseVars = new RegExp('^[^\\/\\*\\-]*?(:\\w+)', 'gim'),
+                useVars = new Set(),
+                bindVars = new Set(),
+                errors = new Set(),
+                warnings = new Set();
+            let errorsCount = 0,
+                warningsCount = 0;
+
+            while (match = regCheckUseVars.exec(sqlTag.text)) {
+                // Console.log('match', match);
+                useVars.add(match[1].substring(1));
+            }
+
+            vars.forEach((tagVar) => {
+                const nameVar = tagVar.attr('name');
+
+                bindVars.add(nameVar && nameVar.value());
+            });
+
+            // Проверяем привязанные переменные по отношению к используемым в запросе
+            bindVars.forEach((bindVar) => {
+                if (!useVars.has(bindVar)) {
+                    warningsCount++;
+                    warnings.add(`${warningsCount}: name="${chalk.yellow(bindVar)}"`);
+                    isError = true;
+                }
+            });
+
+            if (warningsCount > 0) {
+                console.log(`${chalk.yellow('Warning')}: К компоненту ${cmp} с именем ${sqlTag.name} на строке ${sqlTag.line
+                } привязаны перменные, которые не используется в запросе:`);
+
+                warnings.forEach((warning) => {
+                    console.log(warning);
+                });
+            }
+
+            // Проверяем используемые переменные по отношению к привязанным к запросу
+            useVars.forEach((useVar) => {
+                if (!bindVars.has(useVar)) {
+                    errorsCount++;
+                    errors.add(`${errorsCount}: name="${chalk.red(useVar)}"`);
+                    isError = true;
+                }
+            });
+
+            if (errorsCount > 0) {
+                console.log(`${chalk.red('Error')}: В компоненте ${cmp} с именем ${sqlTag.name} на строке ${sqlTag.line
+                } используется перменные, которые не привязаны к компоненту:`);
+
+                errors.forEach((error) => {
+                    console.log(error);
+                });
+            }
+
+            if (warningsCount > 0 || errors > 0) {
+                console.log('\n-------------------------------------\n');
+            }
+        });
+
+        if (isError) {
+            console.log('Ошибок с переменными запроса не обнаружено\n');
+        }
+
+        console.log('*** Проверка переданных/используемых параметров завершена ***\n\n');
 
         return this;
     }
@@ -507,22 +602,18 @@ class Linter {
     /**
      * Метод линтит все sql файлы на предмет использование таблиц в запросе
      * и выводит ошибки в консоль если совпадения были найдены.
-     * @param {object} contents - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
+     * @param {object} sql - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
      * @return {object<Linter>}
      */
-    lintTables(contents = this.contents) {
+    _checkTables(sql) {
+        console.log('*** Проверка использования таблиц ***\n');
+
         let match = [],
-            sql = [];
-        const regex = new RegExp('(^|FROM|JOIN)\\s+D_(?!PKG|CL_|V_|C_|P_|STR|TP_|F_)\\S+', 'gim');
+            errors = 0;
+        const sqlTags = sql,
+            regex = new RegExp('(^|FROM|JOIN)\\s+D_(?!PKG|CL_|V_|C_|P_|STR|TP_|F_)\\S+', 'gim');
 
-        // Помещаем все теги
-        this.tags.forEach((tag) => {
-            if (tag.extension === 'sql') {
-                sql = sql.concat(contents[tag.cmp]);
-            }
-        });
-
-        sql.forEach((sqlTag) => {
+        sqlTags.forEach((sqlTag) => {
             const sqlFile = fs.readFileSync(sqlTag.lintFile, this.encoding);
 
             while (match = regex.exec(sqlFile)) {
@@ -542,8 +633,43 @@ class Linter {
 
                 console.log(`Найдено использование таблицы ${chalk.red(tableName)} в запросе компонента ` +
                     `${sqlTag.cmp} с именем ${chalk.green(sqlTag.name)} в файле ${chalk.green(sqlTag.path)}, на строке: ${lineError + sqlTag.line + 1}`);
+
+                errors++;
             }
         });
+
+        if (errors === 0) {
+            console.log(chalk.green('Использование таблиц не обнаружено\n'));
+        }
+
+        console.log('*** Проверка использования таблиц завершено ***\n\n');
+
+        return this;
+    }
+
+    /**
+     * Метод линтит переданные SQL файлы и выводит найденные ошибки в консоль.
+     * @param {object} contents - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
+     * Структура:
+     * {
+     *      имя_тега: [] - Массив с кодом всех тегов.
+     * }
+     * @return {object<Linter>}
+     */
+    lintSQL(contents = this.contents) {
+        console.log('\n\n================================= SQL =================================\n\n');
+
+        let sql = [];
+
+        // Помещаем все теги
+        this.tags.forEach((tag) => {
+            if (tag.extension === 'sql') {
+                sql = sql.concat(contents[tag.cmp]);
+            }
+        });
+
+        this._checkUseSqlParams(sql).
+            _checkTables(sql);
 
         return this;
     }

@@ -3,18 +3,101 @@ const Linter = require('./classes/Linter'),
     {exec} = require('child_process');
 const {argv} = require('yargs'),
     executeLinting = async (paths) => {
-        const linter = new Linter(paths).
-            getContentTagsInFile().
-            writeToFile().
-            lintTables().
-            lintJS(argv._.includes('jsFix'));
+        const lintNameSQL = 'lintSQL',
+            lintNameJS = 'lintJS',
+            lintNamePHP = 'lintPHP',
+            linter = new Linter(paths).
+                getContentTagsInFile().
+                writeToFile();
 
-        await linter.lintPHPFiles(exec, argv._.includes('phpFix')).
-            catch((error) => {
-                if (error) {
-                    console.error(`Произошла ошибка при проверке PHP-кода: ${error}`);
-                }
+        let linterNames = [
+                lintNameSQL,
+                lintNameJS,
+                lintNamePHP
+            ],
+            lintersCount = 0;
+
+        // Избавляемся от зависимости регистра
+        argv._ = argv._.map((item) => item.toLowerCase());
+        linterNames = linterNames.map((linterName) => linterName.toLowerCase());
+
+        // Проверяем количество переданных линтеров
+        linterNames.forEach((linterName) => {
+            if (argv._.includes(linterName)) {
+                lintersCount++;
+            }
+        });
+
+        // Если не было передано ни одно линтера, то линтим всё
+        if (lintersCount === 0) {
+            linterNames.forEach((linterName) => {
+                argv._.push(linterName);
             });
+        }
+
+        const lintHandlers = [
+            {
+                lint: lintNameSQL,
+                handler: (linter) => {
+                    linter.lintSQL();
+                }
+            },
+            {
+                lint: lintNameJS,
+                handler: (linter) => {
+                    linter.lintJS(argv._.includes('jsFix'.toLowerCase()));
+                }
+            },
+            {
+                lint: lintNamePHP,
+                handler: async (linter) => {
+                    await linter.lintPHPFiles(exec, argv._.includes('phpFix'.toLowerCase())).
+                        catch((error) => {
+                            if (error) {
+                                console.error(`Произошла ошибка при проверке PHP-кода: ${error}`);
+                            }
+                        });
+                }
+            }
+        ];
+
+        // Избавляемся от зависимости регистра
+        argv._ = argv._.map((item) => item.toLowerCase());
+
+        lintHandlers.forEach((lintHandler) => {
+            if (argv._.includes(lintHandler.lint.toLowerCase())) {
+                lintHandler.handler(linter);
+            }
+        });
+
+        /*
+         *If (argv._.includes(lintSQL)) {
+         *  linter.lintSQL();
+         *}
+         *if (argv._.includes(lintJS)) {
+         *  linter.lintJS(argv._.includes('jsFix'));
+         *}
+         *if (argv._.includes(lintPHP)) {
+         *  await linter.lintPHPFiles(exec, argv._.includes('phpFix')).
+         *      catch((error) => {
+         *          if (error) {
+         *              console.error(`Произошла ошибка при проверке PHP-кода: ${error}`);
+         *          }
+         *      });
+         *}
+         */
+
+        /*
+         *[
+         *  lintSQL,
+         *  lintJS,
+         *  lintPHP
+         *].forEach(lint => {
+         *  if (argv._.includes(lint)) {
+         *
+         *  }
+         *});
+         */
 
         linter.deleteTempFiles();
     },
