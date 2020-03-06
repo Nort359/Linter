@@ -590,7 +590,7 @@ class Linter {
             }
         });
 
-        if (isError) {
+        if (!isError) {
             console.log('Ошибок с переменными запроса не обнаружено');
         }
 
