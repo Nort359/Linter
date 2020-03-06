@@ -559,8 +559,8 @@ class Linter {
             });
 
             if (warningsCount > 0) {
-                console.log(`${chalk.yellow('Warning')}: К компоненту ${cmp} с именем ${sqlTag.name} на строке ${sqlTag.line
-                } привязаны перменные, которые не используется в запросе:`);
+                console.log(`${chalk.yellow('Warning')}: Файл: ${chalk.yellow(sqlTag.path)}. К компоненту ${cmp} с именем ${sqlTag.name
+                } на строке ${sqlTag.line} привязаны перменные, которые не используется в запросе:`);
 
                 warnings.forEach((warning) => {
                     console.log(warning);
@@ -577,8 +577,8 @@ class Linter {
             });
 
             if (errorsCount > 0) {
-                console.log(`${chalk.red('Error')}: В компоненте ${cmp} с именем ${sqlTag.name} на строке ${sqlTag.line
-                } используется перменные, которые не привязаны к компоненту:`);
+                console.log(`${chalk.red('Error')}: Файл: ${chalk.red(sqlTag.path)}. В компоненте ${cmp} с именем ${sqlTag.name
+                } на строке ${sqlTag.line} используется перменные, которые не привязаны к компоненту:`);
 
                 errors.forEach((error) => {
                     console.log(error);

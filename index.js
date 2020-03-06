@@ -91,9 +91,10 @@ const {argv} = require('yargs'),
     },
     addOrGetPaths = setPaths();
 
-if (!argv.fromGit) {
-    argv.fromGit = 1;
-}
+    const allFilesFlag = 'allFiles';
+
+// Избавляемся от зависимости регистра
+argv._ = argv._.map((item) => item.toLowerCase());
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf-8'));
 let absPathRepo = __dirname.replace(/\\/g, '/');
@@ -102,7 +103,7 @@ if (absPathRepo.includes(config.linterPath)) {
     absPathRepo = absPathRepo.replace(config.linterPath, '');
 }
 
-if (+argv.fromGit === 1) {
+if (!argv._.includes(allFilesFlag.toLowerCase())) {
     /**
      * Выполняет команду в терминале.
      * @param {string} command - Текст команды.
