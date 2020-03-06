@@ -6,6 +6,7 @@ const {argv} = require('yargs'),
         const lintNameSQL = 'lintSQL',
             lintNameJS = 'lintJS',
             lintNamePHP = 'lintPHP',
+            isFixed = 'fix',
             linter = new Linter(paths).
                 getContentTagsInFile().
                 writeToFile();
@@ -45,13 +46,13 @@ const {argv} = require('yargs'),
             {
                 lint: lintNameJS,
                 handler: (linter) => {
-                    linter.lintJS(argv._.includes('jsFix'.toLowerCase()));
+                    linter.lintJS(argv._.includes(isFixed));
                 }
             },
             {
                 lint: lintNamePHP,
                 handler: async (linter) => {
-                    await linter.lintPHPFiles(exec, argv._.includes('phpFix'.toLowerCase())).
+                    await linter.lintPHPFiles(exec, argv._.includes(isFixed)).
                         catch((error) => {
                             if (error) {
                                 console.error(`Произошла ошибка при проверке PHP-кода: ${error}`);
@@ -69,35 +70,6 @@ const {argv} = require('yargs'),
                 lintHandler.handler(linter);
             }
         });
-
-        /*
-         *If (argv._.includes(lintSQL)) {
-         *  linter.lintSQL();
-         *}
-         *if (argv._.includes(lintJS)) {
-         *  linter.lintJS(argv._.includes('jsFix'));
-         *}
-         *if (argv._.includes(lintPHP)) {
-         *  await linter.lintPHPFiles(exec, argv._.includes('phpFix')).
-         *      catch((error) => {
-         *          if (error) {
-         *              console.error(`Произошла ошибка при проверке PHP-кода: ${error}`);
-         *          }
-         *      });
-         *}
-         */
-
-        /*
-         *[
-         *  lintSQL,
-         *  lintJS,
-         *  lintPHP
-         *].forEach(lint => {
-         *  if (argv._.includes(lint)) {
-         *
-         *  }
-         *});
-         */
 
         linter.deleteTempFiles();
     },

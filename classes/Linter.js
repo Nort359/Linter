@@ -591,10 +591,10 @@ class Linter {
         });
 
         if (isError) {
-            console.log('Ошибок с переменными запроса не обнаружено\n');
+            console.log('Ошибок с переменными запроса не обнаружено');
         }
 
-        console.log('*** Проверка переданных/используемых параметров завершена ***\n\n');
+        console.log('\n*** Проверка переданных/используемых параметров завершена ***\n\n');
 
         return this;
     }
@@ -602,25 +602,42 @@ class Linter {
     /**
      * Метод линтит все sql файлы на предмет использование таблиц в запросе
      * и выводит ошибки в консоль если совпадения были найдены.
+     * @param {boolean} isFix - Флаг, показывающий нужно ли исправлять найденные ошибки.
      * @param {object} sql - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
      * @return {object<Linter>}
      */
-    _checkTables(sql) {
+    _checkTables(isFix = false, sql) {
         console.log('*** Проверка использования таблиц ***\n');
 
         let match = [],
             errors = 0;
-        const sqlTags = sql,
+        const self = this,
+            sqlTags = sql,
             regex = new RegExp('(^|FROM|JOIN)\\s+D_(?!PKG|CL_|V_|C_|P_|STR|TP_|F_)\\S+', 'gim');
 
         sqlTags.forEach((sqlTag) => {
-            const sqlFile = fs.readFileSync(sqlTag.lintFile, this.encoding);
+            let sqlFile = fs.readFileSync(sqlTag.lintFile, this.encoding);
 
             while (match = regex.exec(sqlFile)) {
+                let strMatches = match[0].split(' '),
+                    lineError = 0;
                 const sqlLines = match.input.split('\n'),
-                    strMatches = match[0].split(' '),
                     tableName = strMatches && strMatches[strMatches.length - 1];
-                let lineError = 0;
+
+                let strMatchesChanged = strMatches.map((str) => {
+                    if (str === tableName) {
+                        return tableName.replace('D_', 'D_V_');
+                    }
+
+                    return str;
+                });
+
+                strMatchesChanged = strMatchesChanged.join(' ').trim();
+                sqlFile = sqlFile.replace(strMatches.join(' ').trim(), strMatchesChanged);
+
+                if (isFix) {
+                    fs.writeFileSync(sqlTag.path, self.replaceFixedTag(sqlTag, sqlFile));
+                }
 
                 if (sqlLines) {
                     for (let i = 0; i < sqlLines.length; i++) {
@@ -639,16 +656,17 @@ class Linter {
         });
 
         if (errors === 0) {
-            console.log(chalk.green('Использование таблиц не обнаружено\n'));
+            console.log(chalk.green('Использование таблиц не обнаружено'));
         }
 
-        console.log('*** Проверка использования таблиц завершено ***\n\n');
+        console.log('\n*** Проверка использования таблиц завершено ***\n\n');
 
         return this;
     }
 
     /**
      * Метод линтит переданные SQL файлы и выводит найденные ошибки в консоль.
+     * @param {boolean} isFix - Флаг, показывающий нужно ли исправлять найденные ошибки.
      * @param {object} contents - Объект, где ключом выступает имя тега, а значением массив с кодом для каждого тега.
      * Структура:
      * {
@@ -656,7 +674,7 @@ class Linter {
      * }
      * @return {object<Linter>}
      */
-    lintSQL(contents = this.contents) {
+    lintSQL(isFix = false, contents = this.contents) {
         console.log('\n\n================================= SQL =================================\n\n');
 
         let sql = [];
@@ -669,7 +687,7 @@ class Linter {
         });
 
         this._checkUseSqlParams(sql).
-            _checkTables(sql);
+            _checkTables(isFix, sql);
 
         return this;
     }
