@@ -2,12 +2,12 @@ const Linter = require('./classes/Linter'),
     fs = require('fs'),
     {exec} = require('child_process');
 const {argv} = require('yargs'),
-    executeLinting = async (paths) => {
+    executeLinting = async (paths, startPath) => {
         const lintNameSQL = 'lintSQL',
             lintNameJS = 'lintJS',
             lintNamePHP = 'lintPHP',
             isFixed = 'fix',
-            linter = new Linter(paths).
+            linter = new Linter(paths, startPath).
                 getContentTagsInFile().
                 writeToFile();
 
@@ -98,9 +98,11 @@ argv._ = argv._.map((item) => item.toLowerCase());
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf-8'));
 let absPathRepo = __dirname.replace(/\\/g, '/');
+let absPathLinter = absPathRepo;
+let regPathRepo = new RegExp(config.linterPath + '$', 'i');
 
 if (absPathRepo.includes(config.linterPath)) {
-    absPathRepo = absPathRepo.replace(config.linterPath, '');
+    absPathRepo = absPathRepo.replace(regPathRepo, '');
 }
 
 if (!argv._.includes(allFilesFlag.toLowerCase())) {
@@ -179,7 +181,12 @@ if (!argv._.includes(allFilesFlag.toLowerCase())) {
                         }
 
                         if (isChanged && !isDeleted) {
-                            addOrGetPaths(filePath);
+                            if (filePath.includes('../')) {
+                                filePath = filePath.replace(/\.\.\//gi, '');
+                                addOrGetPaths(absPathRepo + filePath);
+                            } else {
+                                addOrGetPaths(absPathLinter + '/' + filePath);
+                            }
                         }
                     });
                 } else {
@@ -192,6 +199,6 @@ if (!argv._.includes(allFilesFlag.toLowerCase())) {
         }).
         catch((error) => console.error(`При выполнение линтинга произошла ошибка: ${error}`));
 } else {
-    executeLinting().
+    executeLinting(null, absPathRepo).
         catch((error) => console.error(`При выполнение линтинга произошла ошибка: ${error}`));
 }

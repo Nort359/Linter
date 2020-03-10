@@ -11,9 +11,10 @@ class Linter {
     /**
      * @constructs Linter
      * @param {string|Array<string>} filePath - Путь до файла.
+     * @param {string} startPath              - Путь, откуда начинать поиск в случае, если массив с путями до файлов не передан.
      * @param {string} encoding           - Кодировка файла.
      */
-    constructor(filePath, encoding = 'utf8') {
+    constructor(filePath, startPath, encoding = 'utf8') {
         this.paths = [];
         this.encoding = encoding;
         this.fileContents = [];
@@ -36,7 +37,7 @@ class Linter {
         if (filePath) {
             this.paths = !Array.isArray(filePath) ? [filePath] : filePath;
         } else {
-            this.getFilePaths('.\\', this.checkExt, [
+            this.getFilePaths(startPath, this.checkExt, [
                 'node_modules',
                 '.git',
                 '.idea',
@@ -524,23 +525,45 @@ class Linter {
         console.log('*** Проверка переданных/используемых параметров ***\n');
 
         const sqlTags = Array.isArray(sql) ? sql : [sql];
-        let match = [],
+        let matchComments = [],
+            matchUseVars = [],
             isError = false;
 
         sqlTags.forEach((sqlTag) => {
-            const {cmp} = sqlTag,
-                vars = sqlTag.node.find(`./cmp${cmp}Var|./component[@cmptype="${cmp}Var"]|./component[@cmptype="Variable"]`),
-                regCheckUseVars = new RegExp('^[^\\/\\*\\-]*?(:\\w+)', 'gim'),
+            let errorsCount = 0,
+                warningsCount = 0,
+                {cmp} = sqlTag,
+                cmpSearch = cmp;
+
+            switch (cmpSearch) {
+                case 'SubAction': cmpSearch = 'Action'; break;
+                case 'SubSelect': cmpSearch = 'DataSet'; break;
+            }
+
+            let vars = sqlTag.node.find(`./cmp${cmpSearch}Var|./component[@cmptype="${cmpSearch}Var"]|./component[@cmptype="Variable"]`);
+            const regComments = new RegExp('\\/\\*.*\\*\\/|--.*|\'.*\'|".*"', 'gim'),
+                regCheckUseVars = new RegExp(':\\w+', 'gim'),
                 useVars = new Set(),
                 bindVars = new Set(),
                 errors = new Set(),
                 warnings = new Set();
-            let errorsCount = 0,
-                warningsCount = 0;
 
-            while (match = regCheckUseVars.exec(sqlTag.text)) {
-                // Console.log('match', match);
-                useVars.add(match[1].substring(1));
+            if (cmp === 'SubSelect') {
+                const subSelectName = sqlTag.node.attr('name').value();
+                const xPathD3SubSelect = `.//cmp${cmp}[@name="${subSelectName}"]/../cmpDataSetVar`;
+                const xPathM2SubSelect = `.//component[@cmptype="${cmpSearch}"][@name="${subSelectName}"]/../component[@cmptype="DataSet"]/Variable`;
+                const xmlDoc = libxml.parseXmlString(sqlTag.file.content);
+
+                vars = xmlDoc.find(xPathD3SubSelect + '|' + xPathM2SubSelect);
+            }
+
+            // Убираем комментарии из проверяемого текста, чтобы не захватить переменные из комментариев
+            while (matchComments = regComments.exec(sqlTag.text)) {
+                sqlTag.text = sqlTag.text.replace(matchComments[0], '');
+            }
+
+            while (matchUseVars = regCheckUseVars.exec(sqlTag.text)) {
+                useVars.add(matchUseVars[0].substring(1));
             }
 
             vars.forEach((tagVar) => {
@@ -551,7 +574,7 @@ class Linter {
 
             // Проверяем привязанные переменные по отношению к используемым в запросе
             bindVars.forEach((bindVar) => {
-                if (!useVars.has(bindVar)) {
+                if (!useVars.has(bindVar) && sqlTag.text) {
                     warningsCount++;
                     warnings.add(`${warningsCount}: name="${chalk.yellow(bindVar)}"`);
                     isError = true;
@@ -610,34 +633,21 @@ class Linter {
         console.log('*** Проверка использования таблиц ***\n');
 
         let match = [],
-            errors = 0;
-        const self = this,
-            sqlTags = sql,
+            globalErrors = 0;
+        const sqlTags = sql,
             regex = new RegExp('(^|FROM|JOIN)\\s+D_(?!PKG|CL_|V_|C_|P_|STR|TP_|F_)\\S+', 'gim');
 
         sqlTags.forEach((sqlTag) => {
-            let sqlFile = fs.readFileSync(sqlTag.lintFile, this.encoding);
+            const sqlFile = fs.readFileSync(sqlTag.lintFile, this.encoding);
+            let errors = 0;
 
             while (match = regex.exec(sqlFile)) {
-                let strMatches = match[0].split(' '),
-                    lineError = 0;
+                errors++;
+
                 const sqlLines = match.input.split('\n'),
+                    strMatches = match[0].split(' '),
                     tableName = strMatches && strMatches[strMatches.length - 1];
-
-                let strMatchesChanged = strMatches.map((str) => {
-                    if (str === tableName) {
-                        return tableName.replace('D_', 'D_V_');
-                    }
-
-                    return str;
-                });
-
-                strMatchesChanged = strMatchesChanged.join(' ').trim();
-                sqlFile = sqlFile.replace(strMatches.join(' ').trim(), strMatchesChanged);
-
-                if (isFix) {
-                    fs.writeFileSync(sqlTag.path, self.replaceFixedTag(sqlTag, sqlFile));
-                }
+                let lineError = 0;
 
                 if (sqlLines) {
                     for (let i = 0; i < sqlLines.length; i++) {
@@ -648,15 +658,17 @@ class Linter {
                     }
                 }
 
-                console.log(`Найдено использование таблицы ${chalk.red(tableName)} в запросе компонента ` +
-                    `${sqlTag.cmp} с именем ${chalk.green(sqlTag.name)} в файле ${chalk.green(sqlTag.path)}, на строке: ${lineError + sqlTag.line + 1}`);
+                console.log(`Файл: ${chalk.green(sqlTag.path)}. Найдено использование таблицы ${chalk.red(tableName)} в запросе компонента ` +
+                    `${sqlTag.cmp} с именем ${chalk.green(sqlTag.name)}, на строке: ${lineError + sqlTag.line + 1}`);
 
                 errors++;
             }
+
+            globalErrors += errors;
         });
 
-        if (errors === 0) {
-            console.log(chalk.green('Использование таблиц не обнаружено'));
+        if (globalErrors === 0) {
+            console.log(chalk.green('+ Использование таблиц в файле не обнаружено'));
         }
 
         console.log('\n*** Проверка использования таблиц завершено ***\n\n');
