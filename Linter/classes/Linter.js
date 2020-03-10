@@ -255,8 +255,10 @@ class Linter {
                     firstSymbolPosition = Linter.findLetterPosition(line);
                 }
 
+                line = line.replace(/\t/g, '    '); // Заменяем таб на 4 пробела.
+
                 // Пропускаем пустые строки, а в не пустых убираем лишнее количество табов и пробелов.
-                return line = line.trim() !== '' ? `${line.substr(firstSymbolPosition)}\n` : `${line}\n`;
+                return line.trim() !== '' ? `${line.substr(firstSymbolPosition)}\n` : `${line}\n`;
             });
 
             if (Array.isArray(this.contents[cmp][i].text)) {
