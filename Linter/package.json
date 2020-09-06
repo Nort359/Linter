@@ -11,10 +11,12 @@
   "license": "ISC",
   "devDependencies": {
     "eslint": "^6.3.0",
-    "eslint-config-google": "^0.13.0"
+    "eslint-config-google": "^0.13.0",
+    "jasmine": "^3.6.1"
   },
   "description": "",
   "dependencies": {
+    "glob": "^7.1.6",
     "libxmljs": "^0.19.5",
     "yargs": "^15.1.0"
   }

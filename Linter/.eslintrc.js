@@ -2,7 +2,7 @@ module.exports = {
     'env': {
         'browser': true,
         'commonjs': true,
-        'es6': true
+        'es6': false
     },
     // 'extends': 'eslint:recommended', // no-undef
     'globals': {
@@ -20,7 +20,7 @@ module.exports = {
         'array-callback-return': 'error',
         'array-element-newline': 'error',
         'arrow-body-style': 'error',
-        'arrow-parens': 'error',
+        'arrow-parens': 'off',
         'arrow-spacing': 'error',
         'block-scoped-var': 'error',
         'block-spacing': 'error',
@@ -95,7 +95,7 @@ module.exports = {
         'lines-between-class-members': 'error',
         'max-classes-per-file': 'error',
         'max-depth': 'error',
-        'max-len': 'error',
+        'max-len': 'off',
         'max-lines': 'error',
         'max-lines-per-function': 'error',
         'max-nested-callbacks': 'error',
@@ -200,11 +200,14 @@ module.exports = {
         'no-warning-comments': 'error',
         'no-whitespace-before-property': 'error',
         'nonblock-statement-body-position': 'error',
-        'object-curly-newline': 'error',
+        'object-curly-newline': [
+            'error',
+            'always'
+        ], // Ставить новую строку после и перед кудрявой скобкой
         'object-curly-spacing': 'error',
         'object-property-newline': 'error',
-        'object-shorthand': 'error',
-        'one-var': 'error',
+        'object-shorthand': 'off', // Запись функции в объектах в сокращённом виде (без ключевого слова function)
+        'one-var': 'off', // Каждое новое объявление переменной начинать через запятую, а не нового ключевого слова var/let/const
         'one-var-declaration-per-line': 'error',
         'operator-assignment': 'error',
         'operator-linebreak': 'error',
@@ -212,7 +215,7 @@ module.exports = {
         'padding-line-between-statements': 'error',
         'prefer-arrow-callback': 'off',
         'prefer-const': 'error',
-        'prefer-destructuring': 'error',
+        'prefer-destructuring': 'off', // Деструкторизацию объектов
         'prefer-named-capture-group': 'error',
         'prefer-numeric-literals': 'error',
         'prefer-object-spread': 'error',
@@ -220,7 +223,7 @@ module.exports = {
         'prefer-reflect': 'error',
         'prefer-rest-params': 'error',
         'prefer-spread': 'error',
-        'prefer-template': 'off',
+        'prefer-template': 'off', // Строковая интерполяция
         'quote-props': 'off',
         'quotes': [
             'error',
@@ -231,7 +234,7 @@ module.exports = {
         'require-jsdoc': 'error',
         'require-unicode-regexp': 'error',
         'rest-spread-spacing': 'error',
-        'semi': 'off',
+        'semi': 'error',
         'semi-spacing': 'error',
         'semi-style': [
             'error',
